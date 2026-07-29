@@ -12,7 +12,13 @@ import {
   sumBySource,
   sumInRange,
 } from "@/lib/aggregate";
-import { addDays, formatLong, todayInGymTz } from "@/lib/dates";
+import {
+  addDays,
+  bucketBounds,
+  formatBucketLabel,
+  shiftBucket,
+  todayInGymTz,
+} from "@/lib/dates";
 import {
   AI_CHANNELS,
   AI_CHANNEL_SOURCES,
@@ -33,17 +39,27 @@ import { FunnelCard } from "@/components/FunnelCard";
 import { KpiCard } from "@/components/KpiCard";
 import { LeadSourceCard } from "@/components/LeadSourceCard";
 import { Sidebar } from "@/components/Sidebar";
-import { RangePreset, Topbar } from "@/components/Topbar";
+import { Topbar } from "@/components/Topbar";
 import { TrendChart } from "@/components/TrendChart";
 import { WeekdayCard } from "@/components/WeekdayCard";
 
 const LEADS_KEY = "form_submissions_total";
 const AI_KEY = "ai_conversations";
 
+/** Retention is 90 days, so nothing older is offerable in the pickers. */
+const RETENTION_DAYS = 90;
+
+/** How many buckets of history the trend chart shows behind the selected one. */
+const TRAIL: Record<Granularity, number> = {
+  daily: 30,
+  weekly: 12,
+  monthly: 12,
+};
+
 export default function DashboardPage() {
   const { rows, loading, error, lastUpdated, refresh } = useMetrics();
-  const [range, setRange] = useState<RangePreset>(30);
   const [granularity, setGranularity] = useState<Granularity>("daily");
+  const [anchor, setAnchor] = useState<string>(() => todayInGymTz());
   const [leadSource, setLeadSource] = useState<string | null>(null);
   const [channel, setChannel] = useState<string | null>(null);
 
@@ -51,11 +67,28 @@ export default function DashboardPage() {
   const firstLoad = loading && rows.length === 0 && !error;
   const refetching = loading && rows.length > 0;
 
+  const today = todayInGymTz();
+  const minDate = addDays(today, -(RETENTION_DAYS - 1));
+
   const view = useMemo(() => {
-    const to = todayInGymTz();
-    const from = addDays(to, -(range - 1));
-    const prevTo = addDays(from, -1);
-    const prevFrom = addDays(prevTo, -(range - 1));
+    // The selected bucket is what every headline number reports on.
+    const sel = bucketBounds(anchor, granularity);
+    const from = sel.start;
+    // Never plot past today: a half-elapsed week shouldn't trail off into zeros.
+    const to = sel.end > today ? today : sel.end;
+
+    const prev = bucketBounds(shiftBucket(anchor, granularity, -1), granularity);
+
+    // The chart needs more than one point to be a chart, so it shows the
+    // buckets leading up to the selected one — clamped to the retention floor,
+    // since buckets older than that are guaranteed empty and would just pad the
+    // axis with zeros.
+    const trailStart = bucketBounds(
+      shiftBucket(anchor, granularity, -(TRAIL[granularity] - 1)),
+      granularity,
+    ).start;
+    const retentionFloor = bucketBounds(minDate, granularity).start;
+    const windowStart = trailStart < retentionFloor ? retentionFloor : trailStart;
 
     // Dimension filters only override the aggregate series; the per-channel
     // series ARE the breakdown and keep their own fixed source.
@@ -67,7 +100,7 @@ export default function DashboardPage() {
     const spark = buildChartData(
       rows,
       KPI_SERIES,
-      from,
+      windowStart,
       to,
       "daily",
       selection,
@@ -75,7 +108,7 @@ export default function DashboardPage() {
 
     const kpis = KPI_SERIES.map((id) => {
       const current = sumInRange(rows, id, from, to, selection);
-      const previous = sumInRange(rows, id, prevFrom, prevTo, selection);
+      const previous = sumInRange(rows, id, prev.start, prev.end, selection);
       return {
         id,
         value: current,
@@ -84,9 +117,10 @@ export default function DashboardPage() {
       };
     });
 
-    // "Most active day" reads the whole lead pipeline, not one metric.
+    // Weekday needs a span to be meaningful, so it reads the trend window
+    // rather than the selected bucket.
     const weekday = FUNNEL_SERIES.map((id) =>
-      buildWeekdayData(rows, id, from, to, selection),
+      buildWeekdayData(rows, id, windowStart, to, selection),
     ).reduce((acc, cur) => acc.map((v, i) => v + cur[i]), new Array(7).fill(0));
 
     const leadTotals = sumBySource(rows, LEADS_KEY, from, to);
@@ -111,6 +145,7 @@ export default function DashboardPage() {
     return {
       from,
       to,
+      windowStart,
       kpis,
       weekday,
       leadTotals,
@@ -119,7 +154,7 @@ export default function DashboardPage() {
       tableRows: buildTableData(
         rows,
         TABLE_SERIES,
-        from,
+        windowStart,
         to,
         granularity,
         selection,
@@ -127,15 +162,21 @@ export default function DashboardPage() {
       chart: buildChartData(
         rows,
         CHART_SERIES,
-        from,
+        windowStart,
         to,
         granularity,
         selection,
       ),
       detail: buildSourceDetail(
         rows,
-        [LEADS_KEY, AI_KEY, "game_plan_call_booked", "consultation_booked", "consultation_won"],
-        from,
+        [
+          LEADS_KEY,
+          AI_KEY,
+          "game_plan_call_booked",
+          "consultation_booked",
+          "consultation_won",
+        ],
+        windowStart,
         to,
         granularity,
       ),
@@ -146,9 +187,9 @@ export default function DashboardPage() {
       calls: sumInRange(rows, "game_plan_call_booked", from, to, selection),
       leads: sumInRange(rows, "leads_created", from, to, selection),
     };
-  }, [rows, range, granularity, leadSource, channel]);
+  }, [rows, anchor, granularity, leadSource, channel, today, minDate]);
 
-  const periodLabel = `${formatLong(view.from)} — ${formatLong(view.to)}`;
+  const periodLabel = formatBucketLabel(anchor, granularity);
   const filterNote = [
     leadSource ? `origin: ${leadSource}` : null,
     channel ? `channel: ${channel}` : null,
@@ -157,9 +198,20 @@ export default function DashboardPage() {
     .join(" · ");
   const scopedLabel = filterNote ? `${periodLabel} · ${filterNote}` : periodLabel;
 
+  // Counted from what actually rendered, so the caption can't overstate the span.
+  const unit =
+    granularity === "daily" ? "day" : granularity === "weekly" ? "week" : "month";
+  const spanCount = view.chart.length;
+  const trendLabel = `${spanCount} ${unit}${spanCount === 1 ? "" : "s"} up to ${periodLabel}`;
+
+  const handlePeriodChange = (g: Granularity, next: string) => {
+    setGranularity(g);
+    setAnchor(next);
+  };
+
   const handleExport = () =>
     downloadCsv(
-      `formula-fitness-${granularity}-${view.from}-to-${view.to}.csv`,
+      `formula-fitness-${granularity}-${view.windowStart}-to-${view.to}.csv`,
       toCsv(view.tableRows, TABLE_SERIES, view.detail),
     );
 
@@ -169,10 +221,11 @@ export default function DashboardPage() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
-          range={range}
-          onRangeChange={setRange}
           granularity={granularity}
-          onGranularityChange={setGranularity}
+          anchor={anchor}
+          minDate={minDate}
+          maxDate={today}
+          onPeriodChange={handlePeriodChange}
           leadSource={leadSource}
           onLeadSourceChange={setLeadSource}
           leadSourceOptions={view.leadSourceOptions}
@@ -237,7 +290,7 @@ export default function DashboardPage() {
               seriesIds={CHART_SERIES}
               loading={firstLoad}
               refetching={refetching}
-              subtitle={scopedLabel}
+              subtitle={filterNote ? `${trendLabel} · ${filterNote}` : trendLabel}
             />
           </section>
 
@@ -290,7 +343,7 @@ export default function DashboardPage() {
                 totals={view.weekday}
                 loading={firstLoad}
                 refetching={refetching}
-                subtitle="Pipeline activity by weekday"
+                subtitle={`Pipeline activity · ${trendLabel}`}
               />
             </div>
           </div>
@@ -302,7 +355,7 @@ export default function DashboardPage() {
               seriesIds={TABLE_SERIES}
               loading={firstLoad}
               refetching={refetching}
-              subtitle={`${scopedLabel} · ${granularity}`}
+              subtitle={filterNote ? `${trendLabel} · ${filterNote}` : trendLabel}
             />
           </section>
 

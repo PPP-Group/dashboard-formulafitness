@@ -73,7 +73,9 @@ export function Sidebar({ className }: { className?: string }) {
   return (
     <aside
       className={cn(
-        "flex w-60 shrink-0 flex-col border-r border-line bg-surface",
+        // Pinned to the viewport so navigation stays reachable at any scroll
+        // depth; the nav itself scrolls if it ever outgrows the screen.
+        "sticky top-0 flex h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface",
         className,
       )}
     >

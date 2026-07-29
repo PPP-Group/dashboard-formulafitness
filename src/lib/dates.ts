@@ -67,6 +67,95 @@ export function startOfMonth(iso: string): string {
   return `${y}-${m}-01`;
 }
 
+export function endOfWeek(iso: string): string {
+  return addDays(startOfWeek(iso), 6);
+}
+
+export function endOfMonth(iso: string): string {
+  const d = parseDateOnly(startOfMonth(iso));
+  d.setMonth(d.getMonth() + 1);
+  d.setDate(0); // day 0 of next month = last day of this one
+  return toISODate(d);
+}
+
+export function addMonths(iso: string, months: number): string {
+  const [y, m] = iso.split("-").map(Number);
+  const d = new Date(y, m - 1 + months, 1);
+  return toISODate(d);
+}
+
+/** Inclusive bounds of the bucket containing `iso`, at the given granularity. */
+export function bucketBounds(
+  iso: string,
+  granularity: "daily" | "weekly" | "monthly",
+): { start: string; end: string } {
+  if (granularity === "weekly") {
+    const start = startOfWeek(iso);
+    return { start, end: endOfWeek(start) };
+  }
+  if (granularity === "monthly") {
+    const start = startOfMonth(iso);
+    return { start, end: endOfMonth(start) };
+  }
+  return { start: iso, end: iso };
+}
+
+/** Step a bucket start forwards or backwards by whole buckets. */
+export function shiftBucket(
+  iso: string,
+  granularity: "daily" | "weekly" | "monthly",
+  steps: number,
+): string {
+  if (granularity === "weekly") return addDays(iso, steps * 7);
+  if (granularity === "monthly") return addMonths(iso, steps);
+  return addDays(iso, steps);
+}
+
+/** "Jul 27 – Aug 2, 2026" */
+export function formatWeekRange(weekStart: string): string {
+  const start = parseDateOnly(weekStart);
+  const end = parseDateOnly(endOfWeek(weekStart));
+  const sameMonth = start.getMonth() === end.getMonth();
+  const startTxt = start.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  // Intl renders a day+year request without a month as "2026 (day: 26)", so the
+  // same-month case is composed directly rather than asked for.
+  const endTxt = sameMonth
+    ? `${end.getDate()}, ${end.getFullYear()}`
+    : end.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+  return `${startTxt} – ${endTxt}`;
+}
+
+/** Human label for a selected bucket, used on the picker buttons. */
+export function formatBucketLabel(
+  iso: string,
+  granularity: "daily" | "weekly" | "monthly",
+): string {
+  if (granularity === "weekly") return formatWeekRange(iso);
+  if (granularity === "monthly") return formatMonth(iso);
+  return formatLong(iso);
+}
+
+/** Calendar grid for the month containing `iso`, padded to whole Sun–Sat weeks. */
+export function monthGrid(iso: string): (string | null)[] {
+  const first = parseDateOnly(startOfMonth(iso));
+  const last = parseDateOnly(endOfMonth(iso));
+  const cells: (string | null)[] = [];
+
+  for (let i = 0; i < first.getDay(); i++) cells.push(null);
+  for (let d = 1; d <= last.getDate(); d++) {
+    cells.push(toISODate(new Date(first.getFullYear(), first.getMonth(), d)));
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
 /** Short axis label, e.g. "Jul 29". */
 export function formatShort(iso: string): string {
   return parseDateOnly(iso).toLocaleDateString("en-US", {

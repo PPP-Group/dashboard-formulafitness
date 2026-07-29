@@ -5,20 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Granularity } from "@/lib/aggregate";
 import { cn } from "@/lib/cn";
 import { Logo } from "./Sidebar";
-
-export type RangePreset = 7 | 30 | 90;
-
-const RANGES: { value: RangePreset; label: string }[] = [
-  { value: 7, label: "Last 7 days" },
-  { value: 30, label: "Last 30 days" },
-  { value: 90, label: "Last 90 days" },
-];
-
-const GRANULARITIES: { value: Granularity; label: string }[] = [
-  { value: "daily", label: "Daily" },
-  { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
-];
+import { PeriodPicker } from "./PeriodPicker";
 
 type Option<T> = { value: T; label: string };
 
@@ -107,39 +94,6 @@ function Dropdown<T extends string | number | null>({
   );
 }
 
-function GranularityToggle({
-  value,
-  onChange,
-}: {
-  value: Granularity;
-  onChange: (v: Granularity) => void;
-}) {
-  return (
-    <div
-      role="group"
-      aria-label="Granularity"
-      className="flex rounded-lg border border-line bg-surface p-0.5"
-    >
-      {GRANULARITIES.map((g) => (
-        <button
-          key={g.value}
-          type="button"
-          aria-pressed={g.value === value}
-          onClick={() => onChange(g.value)}
-          className={cn(
-            "rounded-md px-3 py-1.5 text-sm transition-colors",
-            g.value === value
-              ? "bg-brand-soft font-medium text-brand-dark"
-              : "text-ink-soft hover:text-ink",
-          )}
-        >
-          {g.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function freshness(at: Date | null): string {
   if (!at) return "Loading…";
   const secs = Math.floor((Date.now() - at.getTime()) / 1000);
@@ -150,10 +104,11 @@ function freshness(at: Date | null): string {
 }
 
 export function Topbar({
-  range,
-  onRangeChange,
   granularity,
-  onGranularityChange,
+  anchor,
+  minDate,
+  maxDate,
+  onPeriodChange,
   leadSource,
   onLeadSourceChange,
   leadSourceOptions,
@@ -165,10 +120,11 @@ export function Topbar({
   onRefresh,
   onExport,
 }: {
-  range: RangePreset;
-  onRangeChange: (v: RangePreset) => void;
   granularity: Granularity;
-  onGranularityChange: (v: Granularity) => void;
+  anchor: string;
+  minDate: string;
+  maxDate: string;
+  onPeriodChange: (g: Granularity, anchor: string) => void;
   leadSource: string | null;
   onLeadSourceChange: (v: string | null) => void;
   leadSourceOptions: Option<string | null>[];
@@ -230,12 +186,12 @@ export function Topbar({
 
       {/* One filter row, above everything it scopes. */}
       <div className="flex flex-wrap items-center gap-2.5 px-4 py-3 sm:px-6">
-        <GranularityToggle value={granularity} onChange={onGranularityChange} />
-        <Dropdown
-          label="Period"
-          value={range}
-          options={RANGES}
-          onChange={onRangeChange}
+        <PeriodPicker
+          granularity={granularity}
+          anchor={anchor}
+          min={minDate}
+          max={maxDate}
+          onChange={onPeriodChange}
         />
         <Dropdown
           label="Lead origin"
