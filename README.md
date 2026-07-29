@@ -46,11 +46,38 @@ needs it to mean. Metrics without a breakdown store an **empty string**, never
 
 | `metric_key` | Breakdown | `source` values |
 |---|---|---|
-| `form_submissions_total` | yes | `form`, `qr_code`, `call`, `sms`, `chat`, `referral`, `social`, `other` |
+| `form_submissions_total` | yes | the eight lead origins below |
 | `game_plan_call_booked` | no | `''` |
 | `consultation_booked` | no | `''` |
 | `consultation_won` | no | `''` |
 | `ai_conversations` | yes | `call`, `sms`, `email` |
+
+### The eight lead origins
+
+| `source` slug | Label shown | Writing yet? |
+|---|---|---|
+| `form` | Website Form | yes |
+| `call` | AI Voice Call | — |
+| `sms` | SMS Inbound | yes |
+| `qr_code` | QR Code | — |
+| `referral` | Referral | — |
+| `tony_tran_old_lead` | Tony Tran Old Lead | not yet |
+| `tony_tran_website` | Tony Tran Website | not yet |
+| `email_inbound` | Email Inbound | not yet |
+
+Slugs are intentionally **not** renamed to match their labels: `form`, `call` and
+`sms` already carry production rows, and renaming them would orphan that data
+until the n8n workflow changed in lockstep. The label is what anyone reads; the
+slug is only the join key.
+
+The last three are new — they render zero until the workflow starts emitting
+them. Nothing breaks in the meantime, and `mergeSources()` means a slug that
+isn't on this list still appears (title-cased) rather than vanishing from a
+total.
+
+`source` vocabularies overlap across metrics — `call` is "AI Voice Call" as a
+lead origin but "Voice" as a conversation channel — so `humanizeSource()` takes
+a `metricKey` and never resolves labels globally.
 
 ### Two names that don't mean what they say
 

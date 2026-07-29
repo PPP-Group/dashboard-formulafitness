@@ -39,7 +39,7 @@ export function LeadSourceCard({
   const max = Math.max(...rows.map((r) => r.count), 0);
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex h-full flex-col">
       <CardHeader
         title="Leads by origin"
         subtitle={subtitle}

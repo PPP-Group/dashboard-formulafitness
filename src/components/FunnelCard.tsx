@@ -33,7 +33,7 @@ export function FunnelCard({
   const hasData = totals.some((t) => t > 0);
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex h-full flex-col">
       <CardHeader title="Stage volume" subtitle={subtitle} />
 
       <div className={cn("flex-1 px-5 pt-1 pb-5", refetching && "refetching")}>

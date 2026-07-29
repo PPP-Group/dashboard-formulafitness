@@ -184,7 +184,7 @@ export default function DashboardPage() {
 
   const periodLabel = formatBucketLabel(anchor, granularity);
   const filterNote = leadSource
-    ? `origin: ${humanizeSource(leadSource)}`
+    ? `origin: ${humanizeSource(leadSource, LEADS_KEY)}`
     : "";
   /**
    * For cross-metric views it cannot reach — saying "all origins" out loud is

@@ -28,10 +28,20 @@ export function AiChannelsCard({
   const total = totals.reduce((a, b) => a + b, 0);
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex h-full flex-col">
       <CardHeader title="AI Conversations" subtitle={subtitle} />
 
-      <div className={cn("flex-1 px-5 pt-1 pb-5", refetching && "refetching")}>
+      {/*
+        justify-between spreads the hero figure and the channel legend across
+        whatever height the row settles on, instead of leaving a block of empty
+        card below the content.
+      */}
+      <div
+        className={cn(
+          "flex flex-1 flex-col justify-between px-5 pt-1 pb-5",
+          refetching && "refetching",
+        )}
+      >
         {loading ? (
           <>
             <Skeleton className="h-9 w-20" />
@@ -40,41 +50,43 @@ export function AiChannelsCard({
           </>
         ) : (
           <>
-            <p className="text-[32px] leading-none font-semibold text-ink">
-              {formatCount(total)}
-            </p>
-            <p className="mt-1 text-xs text-ink-muted">
-              messages exchanged across active conversations
-            </p>
+            <div>
+              <p className="text-[32px] leading-none font-semibold text-ink">
+                {formatCount(total)}
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">
+                messages exchanged across active conversations
+              </p>
 
-            {/* 2px surface gaps separate segments — no borders around marks. */}
-            <div
-              className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-raised"
-              role="img"
-              aria-label={AI_CHANNELS.map(
-                (id, i) => `${SERIES[id].label}: ${totals[i] ?? 0}`,
-              ).join(", ")}
-            >
-              {total > 0
-                ? AI_CHANNELS.map((id, i) => {
-                    const v = totals[i] ?? 0;
-                    if (v === 0) return null;
-                    return (
-                      <span
-                        key={id}
-                        className="h-full first:rounded-l-full last:rounded-r-full"
-                        style={{
-                          width: `${(v / total) * 100}%`,
-                          background: SERIES[id].color,
-                        }}
-                      />
-                    );
-                  })
-                : null}
+              {/* 2px surface gaps separate segments — no borders around marks. */}
+              <div
+                className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-raised"
+                role="img"
+                aria-label={AI_CHANNELS.map(
+                  (id, i) => `${SERIES[id].label}: ${totals[i] ?? 0}`,
+                ).join(", ")}
+              >
+                {total > 0
+                  ? AI_CHANNELS.map((id, i) => {
+                      const v = totals[i] ?? 0;
+                      if (v === 0) return null;
+                      return (
+                        <span
+                          key={id}
+                          className="h-full first:rounded-l-full last:rounded-r-full"
+                          style={{
+                            width: `${(v / total) * 100}%`,
+                            background: SERIES[id].color,
+                          }}
+                        />
+                      );
+                    })
+                  : null}
+              </div>
             </div>
 
             {/* Legend doubles as the direct-label channel for sub-3:1 fills. */}
-            <ul className="mt-4 space-y-2.5">
+            <ul className="mt-5 space-y-2.5">
               {AI_CHANNELS.map((id, i) => {
                 const v = totals[i] ?? 0;
                 const share = total > 0 ? (v / total) * 100 : 0;

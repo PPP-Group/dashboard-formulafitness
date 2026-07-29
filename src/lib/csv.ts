@@ -34,7 +34,8 @@ export function toCsv(
     ...detail.map((d) => [
       d.bucket,
       d.metricKey,
-      d.source === "" ? "(none)" : humanizeSource(d.source),
+      // Labelled per metric: `call` is a lead origin here, a channel there.
+      d.source === "" ? "(none)" : humanizeSource(d.source, d.metricKey),
       d.count,
     ]),
   ];

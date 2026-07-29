@@ -119,36 +119,51 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
   },
 };
 
+export type SourceOption = { value: string; label: string };
+
 /**
- * Breakdown categories, per the handoff document.
+ * The eight ways a lead can arrive, as defined by the client.
  *
- * Treated as a starting list, not a closed set: anything the workflows write
- * that isn't here still renders (see `mergeSources`), so a new GHL origin never
- * silently disappears from the totals.
+ * Slugs are the values n8n writes into `source` — deliberately NOT renamed to
+ * match the labels. `form`, `call` and `sms` already carry production data, and
+ * renaming them would orphan it until the workflow was changed in lockstep.
+ * The label is what anyone reads; the slug is just the join key.
+ *
+ * `tony_tran_old_lead`, `tony_tran_website` and `email_inbound` are new: they
+ * will read zero until the workflow starts emitting them.
+ *
+ * A starting list, not a closed set — anything the workflow writes that isn't
+ * here still renders (see `mergeSources`), so an unplanned origin never
+ * silently vanishes from a total.
  */
-export const LEAD_SOURCES: { value: string; label: string }[] = [
-  { value: "form", label: "Form" },
-  { value: "qr_code", label: "QR code" },
-  { value: "call", label: "Call" },
-  { value: "sms", label: "SMS" },
-  { value: "chat", label: "Chat" },
+export const LEAD_SOURCES: SourceOption[] = [
+  { value: "form", label: "Website Form" },
+  { value: "call", label: "AI Voice Call" },
+  { value: "sms", label: "SMS Inbound" },
+  { value: "qr_code", label: "QR Code" },
   { value: "referral", label: "Referral" },
-  { value: "social", label: "Social" },
-  { value: "other", label: "Other" },
+  { value: "tony_tran_old_lead", label: "Tony Tran Old Lead" },
+  { value: "tony_tran_website", label: "Tony Tran Website" },
+  { value: "email_inbound", label: "Email Inbound" },
 ];
 
-export const AI_CHANNEL_SOURCES: { value: string; label: string }[] = [
+export const AI_CHANNEL_SOURCES: SourceOption[] = [
   { value: "call", label: "Voice" },
   { value: "sms", label: "SMS" },
   { value: "email", label: "Email" },
 ];
 
-/** Turn an unexpected source value into something presentable. */
-export function humanizeSource(value: string): string {
-  const known = [...LEAD_SOURCES, ...AI_CHANNEL_SOURCES].find(
-    (s) => s.value === value,
-  );
-  if (known) return known.label;
+/**
+ * `source` means different things per metric, and the vocabularies overlap:
+ * `call` is "AI Voice Call" as a lead origin but "Voice" as a conversation
+ * channel. Labels are therefore looked up per metric, never globally.
+ */
+const SOURCE_LABELS: Record<string, SourceOption[]> = {
+  form_submissions_total: LEAD_SOURCES,
+  ai_conversations: AI_CHANNEL_SOURCES,
+};
+
+function titleCase(value: string): string {
   return value
     .split(/[_\s-]+/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -156,17 +171,30 @@ export function humanizeSource(value: string): string {
 }
 
 /**
+ * Label for a `source` value. Pass `metricKey` wherever it's known — without it
+ * an overlapping slug resolves to whichever vocabulary is checked first.
+ */
+export function humanizeSource(value: string, metricKey?: string): string {
+  const list = metricKey
+    ? (SOURCE_LABELS[metricKey] ?? [])
+    : [...LEAD_SOURCES, ...AI_CHANNEL_SOURCES];
+  return list.find((s) => s.value === value)?.label ?? titleCase(value);
+}
+
+/**
  * Known categories first (stable order), then anything else the data contains.
- * Keeps the card readable while guaranteeing nothing is dropped.
+ * Keeps the card readable while guaranteeing nothing is dropped. Extras are
+ * title-cased rather than looked up — by definition they belong to no
+ * vocabulary.
  */
 export function mergeSources(
-  known: { value: string; label: string }[],
+  known: SourceOption[],
   present: string[],
-): { value: string; label: string }[] {
+): SourceOption[] {
   const extra = present
     .filter((p) => p !== "" && !known.some((k) => k.value === p))
     .sort()
-    .map((value) => ({ value, label: humanizeSource(value) }));
+    .map((value) => ({ value, label: titleCase(value) }));
   return [...known, ...extra];
 }
 
