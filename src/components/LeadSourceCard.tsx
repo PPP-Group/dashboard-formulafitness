@@ -1,5 +1,6 @@
 "use client";
 
+import { Filter } from "lucide-react";
 import { brand, viz } from "@/lib/brand";
 import { cn, formatCount, formatPct } from "@/lib/cn";
 import { LEAD_SOURCES, mergeSources } from "@/lib/metrics";
@@ -82,8 +83,9 @@ export function LeadSourceCard({
                       onClick={() => onSelect(isSelected ? null : r.value)}
                       aria-pressed={isSelected}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-md py-0.5 text-left transition-opacity",
+                        "-mx-1.5 flex w-[calc(100%+0.75rem)] items-center gap-3 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-canvas",
                         isDimmed && "opacity-45",
+                        isSelected && "bg-brand-soft hover:bg-brand-soft",
                       )}
                     >
                       <span
@@ -130,8 +132,11 @@ export function LeadSourceCard({
               })}
             </ul>
 
-            <p className="mt-4 text-[11px] leading-relaxed text-ink-faint">
-              Click a category to filter the whole dashboard by it.
+            <p className="mt-4 flex items-center gap-1.5 text-[11px] leading-relaxed text-ink-faint">
+              <Filter size={11} aria-hidden="true" />
+              {selected
+                ? "Filtering the dashboard by this origin — click again to clear."
+                : "Click an origin to filter the whole dashboard by it."}
             </p>
           </>
         )}

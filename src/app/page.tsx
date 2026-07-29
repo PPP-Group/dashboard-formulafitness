@@ -21,14 +21,12 @@ import {
 } from "@/lib/dates";
 import {
   AI_CHANNELS,
-  AI_CHANNEL_SOURCES,
   CHART_SERIES,
   FUNNEL_SERIES,
   KPI_SERIES,
-  LEAD_SOURCES,
   SourceSelection,
   TABLE_SERIES,
-  mergeSources,
+  humanizeSource,
 } from "@/lib/metrics";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { useMetrics } from "@/hooks/useMetrics";
@@ -38,7 +36,6 @@ import { BreakdownTable } from "@/components/BreakdownTable";
 import { FunnelCard } from "@/components/FunnelCard";
 import { KpiCard } from "@/components/KpiCard";
 import { LeadSourceCard } from "@/components/LeadSourceCard";
-import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { TrendChart } from "@/components/TrendChart";
 import { WeekdayCard } from "@/components/WeekdayCard";
@@ -61,7 +58,6 @@ export default function DashboardPage() {
   const [granularity, setGranularity] = useState<Granularity>("daily");
   const [anchor, setAnchor] = useState<string>(() => todayInGymTz());
   const [leadSource, setLeadSource] = useState<string | null>(null);
-  const [channel, setChannel] = useState<string | null>(null);
 
   // First load shows skeletons; later polls hold the previous render instead.
   const firstLoad = loading && rows.length === 0 && !error;
@@ -90,12 +86,9 @@ export default function DashboardPage() {
     const retentionFloor = bucketBounds(minDate, granularity).start;
     const windowStart = trailStart < retentionFloor ? retentionFloor : trailStart;
 
-    // Dimension filters only override the aggregate series; the per-channel
-    // series ARE the breakdown and keep their own fixed source.
-    const selection: SourceSelection = {
-      leads_created: leadSource,
-      ai_conversations: channel,
-    };
+    // Lead origin is the only filterable dimension; the per-channel series ARE
+    // the AI breakdown and keep their own fixed source.
+    const selection: SourceSelection = { leads_created: leadSource };
 
     const spark = buildChartData(
       rows,
@@ -125,23 +118,6 @@ export default function DashboardPage() {
 
     const leadTotals = sumBySource(rows, LEADS_KEY, from, to);
 
-    // Options are driven by what the data actually contains, so a category the
-    // workflows start writing tomorrow shows up without a code change.
-    const leadSourceOptions = [
-      { value: null, label: "All origins" },
-      ...mergeSources(LEAD_SOURCES, Object.keys(leadTotals)).map((s) => ({
-        value: s.value as string | null,
-        label: s.label,
-      })),
-    ];
-    const channelOptions = [
-      { value: null, label: "All channels" },
-      ...mergeSources(
-        AI_CHANNEL_SOURCES,
-        Object.keys(sumBySource(rows, AI_KEY, from, to)),
-      ).map((s) => ({ value: s.value as string | null, label: s.label })),
-    ];
-
     return {
       from,
       to,
@@ -149,8 +125,6 @@ export default function DashboardPage() {
       kpis,
       weekday,
       leadTotals,
-      leadSourceOptions,
-      channelOptions,
       tableRows: buildTableData(
         rows,
         TABLE_SERIES,
@@ -187,15 +161,12 @@ export default function DashboardPage() {
       calls: sumInRange(rows, "game_plan_call_booked", from, to, selection),
       leads: sumInRange(rows, "leads_created", from, to, selection),
     };
-  }, [rows, anchor, granularity, leadSource, channel, today, minDate]);
+  }, [rows, anchor, granularity, leadSource, today, minDate]);
 
   const periodLabel = formatBucketLabel(anchor, granularity);
-  const filterNote = [
-    leadSource ? `origin: ${leadSource}` : null,
-    channel ? `channel: ${channel}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const filterNote = leadSource
+    ? `origin: ${humanizeSource(leadSource)}`
+    : "";
   const scopedLabel = filterNote ? `${periodLabel} · ${filterNote}` : periodLabel;
 
   // Counted from what actually rendered, so the caption can't overstate the span.
@@ -216,10 +187,9 @@ export default function DashboardPage() {
     );
 
   return (
-    <div className="flex min-h-full">
-      <Sidebar className="hidden lg:flex" />
-
-      <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-full justify-center">
+      {/* Capped width now that there's no sidebar eating the left edge. */}
+      <div className="flex min-w-0 flex-1 flex-col 2xl:max-w-[1600px]">
         <Topbar
           granularity={granularity}
           anchor={anchor}
@@ -227,11 +197,8 @@ export default function DashboardPage() {
           maxDate={today}
           onPeriodChange={handlePeriodChange}
           leadSource={leadSource}
-          onLeadSourceChange={setLeadSource}
-          leadSourceOptions={view.leadSourceOptions}
-          channel={channel}
-          onChannelChange={setChannel}
-          channelOptions={view.channelOptions}
+          onClearLeadSource={() => setLeadSource(null)}
+          leadSourceLabel={leadSource ? humanizeSource(leadSource) : ""}
           lastUpdated={lastUpdated}
           loading={loading}
           onRefresh={refresh}
@@ -321,8 +288,6 @@ export default function DashboardPage() {
               <h2 className="sr-only">AI conversations</h2>
               <AiChannelsCard
                 totals={view.ai}
-                selected={channel}
-                onSelect={setChannel}
                 loading={firstLoad}
                 refetching={refetching}
                 subtitle={periodLabel}

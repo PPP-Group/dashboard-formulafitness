@@ -6,7 +6,8 @@ import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
 
 /**
- * Part-to-whole across the three channels.
+ * Part-to-whole across the three channels. Read-only by design — the channel
+ * split is information, not a filter dimension.
  *
  * The underlying metric counts every message exchanged in active conversations
  * — the AI replies to all of them, which is why the card keeps the "AI
@@ -15,15 +16,11 @@ import { Skeleton } from "./ui/Skeleton";
  */
 export function AiChannelsCard({
   totals,
-  selected,
-  onSelect,
   loading,
   refetching,
   subtitle,
 }: {
   totals: number[];
-  selected: string | null;
-  onSelect: (channel: string | null) => void;
   loading: boolean;
   refetching: boolean;
   subtitle: string;
@@ -32,21 +29,7 @@ export function AiChannelsCard({
 
   return (
     <Card className="flex flex-col">
-      <CardHeader
-        title="AI Conversations"
-        subtitle={subtitle}
-        action={
-          selected ? (
-            <button
-              type="button"
-              onClick={() => onSelect(null)}
-              className="rounded-md px-2 py-1 text-xs font-medium text-brand-dark hover:bg-brand-soft"
-            >
-              Clear filter
-            </button>
-          ) : null
-        }
-      />
+      <CardHeader title="AI Conversations" subtitle={subtitle} />
 
       <div className={cn("flex-1 px-5 pt-1 pb-5", refetching && "refetching")}>
         {loading ? (
@@ -76,8 +59,6 @@ export function AiChannelsCard({
                 ? AI_CHANNELS.map((id, i) => {
                     const v = totals[i] ?? 0;
                     if (v === 0) return null;
-                    const src = SERIES[id].source;
-                    const dimmed = selected !== null && selected !== src;
                     return (
                       <span
                         key={id}
@@ -85,7 +66,6 @@ export function AiChannelsCard({
                         style={{
                           width: `${(v / total) * 100}%`,
                           background: SERIES[id].color,
-                          opacity: dimmed ? 0.35 : 1,
                         }}
                       />
                     );
@@ -94,46 +74,24 @@ export function AiChannelsCard({
             </div>
 
             {/* Legend doubles as the direct-label channel for sub-3:1 fills. */}
-            <ul className="mt-4 space-y-1">
+            <ul className="mt-4 space-y-2.5">
               {AI_CHANNELS.map((id, i) => {
                 const v = totals[i] ?? 0;
                 const share = total > 0 ? (v / total) * 100 : 0;
-                const src = SERIES[id].source;
-                const isSelected = selected === src;
-                const isDimmed = selected !== null && !isSelected;
-
                 return (
-                  <li key={id}>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(isSelected ? null : src)}
-                      aria-pressed={isSelected}
-                      className={cn(
-                        "flex w-full items-center gap-2.5 rounded-md py-1 text-left text-sm transition-opacity",
-                        isDimmed && "opacity-45",
-                      )}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ background: SERIES[id].color }}
-                        aria-hidden="true"
-                      />
-                      <span
-                        className={cn(
-                          isSelected
-                            ? "font-semibold text-ink"
-                            : "text-ink-soft",
-                        )}
-                      >
-                        {SERIES[id].label}
-                      </span>
-                      <span className="nums ml-auto font-medium text-ink">
-                        {formatCount(v)}
-                      </span>
-                      <span className="nums w-12 shrink-0 text-right text-xs text-ink-muted">
-                        {formatPct(share, 0)}
-                      </span>
-                    </button>
+                  <li key={id} className="flex items-center gap-2.5 text-sm">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: SERIES[id].color }}
+                      aria-hidden="true"
+                    />
+                    <span className="text-ink-soft">{SERIES[id].label}</span>
+                    <span className="nums ml-auto font-medium text-ink">
+                      {formatCount(v)}
+                    </span>
+                    <span className="nums w-12 shrink-0 text-right text-xs text-ink-muted">
+                      {formatPct(share, 0)}
+                    </span>
                   </li>
                 );
               })}
