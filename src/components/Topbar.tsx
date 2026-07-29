@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Download, RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Granularity } from "@/lib/aggregate";
 import { cn } from "@/lib/cn";
 import { Logo } from "./Sidebar";
@@ -20,15 +20,23 @@ const GRANULARITIES: { value: Granularity; label: string }[] = [
   { value: "monthly", label: "Monthly" },
 ];
 
-function RangePicker({
+type Option<T> = { value: T; label: string };
+
+/** Preset-list dropdown: selection marked by a check, custom rows, no native select. */
+function Dropdown<T extends string | number | null>({
+  label,
   value,
+  options,
   onChange,
 }: {
-  value: RangePreset;
-  onChange: (v: RangePreset) => void;
+  label: string;
+  value: T;
+  options: Option<T>[];
+  onChange: (v: T) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const id = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +52,8 @@ function RangePicker({
     };
   }, [open]);
 
-  const current = RANGES.find((r) => r.value === value)!;
+  const current = options.find((o) => o.value === value) ?? options[0];
+  const isFiltered = value !== options[0].value;
 
   return (
     <div className="relative" ref={ref}>
@@ -53,31 +62,40 @@ function RangePicker({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink transition-colors hover:bg-canvas"
+        aria-labelledby={id}
+        className={cn(
+          "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+          isFiltered
+            ? "border-brand bg-brand-soft text-brand-dark"
+            : "border-line bg-surface text-ink hover:bg-canvas",
+        )}
       >
-        {current.label}
+        <span id={id} className="text-ink-muted">
+          {label}:
+        </span>
+        <span className="font-medium">{current.label}</span>
         <ChevronDown size={15} className="text-ink-muted" />
       </button>
 
       {open ? (
         <ul
           role="listbox"
-          className="absolute right-0 z-20 mt-1.5 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg"
+          className="thin-scroll absolute right-0 z-20 mt-1.5 max-h-72 w-52 overflow-auto rounded-xl border border-line bg-surface py-1 shadow-lg"
         >
-          {RANGES.map((r) => (
-            <li key={r.value}>
+          {options.map((o) => (
+            <li key={String(o.value)}>
               <button
                 type="button"
                 role="option"
-                aria-selected={r.value === value}
+                aria-selected={o.value === value}
                 onClick={() => {
-                  onChange(r.value);
+                  onChange(o.value);
                   setOpen(false);
                 }}
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-canvas"
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-canvas"
               >
-                {r.label}
-                {r.value === value ? (
+                {o.label}
+                {o.value === value ? (
                   <Check size={16} strokeWidth={3} className="text-brand-dark" />
                 ) : null}
               </button>
@@ -128,8 +146,7 @@ function freshness(at: Date | null): string {
   if (secs < 60) return "Updated just now";
   const mins = Math.floor(secs / 60);
   if (mins < 60) return `Updated ${mins} min ago`;
-  const hrs = Math.floor(mins / 60);
-  return `Updated ${hrs}h ago`;
+  return `Updated ${Math.floor(mins / 60)}h ago`;
 }
 
 export function Topbar({
@@ -137,6 +154,12 @@ export function Topbar({
   onRangeChange,
   granularity,
   onGranularityChange,
+  leadSource,
+  onLeadSourceChange,
+  leadSourceOptions,
+  channel,
+  onChannelChange,
+  channelOptions,
   lastUpdated,
   loading,
   onRefresh,
@@ -146,6 +169,12 @@ export function Topbar({
   onRangeChange: (v: RangePreset) => void;
   granularity: Granularity;
   onGranularityChange: (v: Granularity) => void;
+  leadSource: string | null;
+  onLeadSourceChange: (v: string | null) => void;
+  leadSourceOptions: Option<string | null>[];
+  channel: string | null;
+  onChannelChange: (v: string | null) => void;
+  channelOptions: Option<string | null>[];
   lastUpdated: Date | null;
   loading: boolean;
   onRefresh: () => void;
@@ -160,8 +189,8 @@ export function Topbar({
 
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-canvas/85 backdrop-blur">
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-6">
-        <div className="flex items-center gap-2.5 lg:hidden">
+      <div className="flex items-center gap-3 px-4 pt-3.5 sm:px-6">
+        <div className="lg:hidden">
           <Logo size={30} />
         </div>
 
@@ -175,12 +204,6 @@ export function Topbar({
             {freshness(lastUpdated)} · auto-refresh every minute
           </p>
         </div>
-
-        <GranularityToggle
-          value={granularity}
-          onChange={onGranularityChange}
-        />
-        <RangePicker value={range} onChange={onRangeChange} />
 
         <button
           type="button"
@@ -203,6 +226,29 @@ export function Topbar({
           <Download size={15} />
           <span className="hidden sm:inline">Export CSV</span>
         </button>
+      </div>
+
+      {/* One filter row, above everything it scopes. */}
+      <div className="flex flex-wrap items-center gap-2.5 px-4 py-3 sm:px-6">
+        <GranularityToggle value={granularity} onChange={onGranularityChange} />
+        <Dropdown
+          label="Period"
+          value={range}
+          options={RANGES}
+          onChange={onRangeChange}
+        />
+        <Dropdown
+          label="Lead origin"
+          value={leadSource}
+          options={leadSourceOptions}
+          onChange={onLeadSourceChange}
+        />
+        <Dropdown
+          label="Channel"
+          value={channel}
+          options={channelOptions}
+          onChange={onChannelChange}
+        />
       </div>
     </header>
   );

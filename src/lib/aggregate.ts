@@ -6,7 +6,13 @@ import {
   startOfWeek,
   weekdayIndex,
 } from "./dates";
-import { MetricRow, SERIES, SeriesId, rowMatches } from "./metrics";
+import {
+  MetricRow,
+  SERIES,
+  SeriesId,
+  SourceSelection,
+  rowMatches,
+} from "./metrics";
 
 export type Granularity = "daily" | "weekly" | "monthly";
 
@@ -29,9 +35,9 @@ function labelOf(bucket: string, g: Granularity): string {
 }
 
 /**
- * Ordered, de-duplicated list of buckets covering [from, to] — derived from the
- * calendar rather than from the data, so days with no rows still render as zero
- * instead of collapsing the chart.
+ * Ordered, de-duplicated buckets covering [from, to] — derived from the calendar
+ * rather than the data, so days with no rows render as zero instead of
+ * collapsing the chart.
  */
 function bucketsIn(from: string, to: string, g: Granularity): string[] {
   const seen = new Set<string>();
@@ -56,14 +62,35 @@ export function sumInRange(
   seriesId: SeriesId,
   from: string,
   to: string,
+  selection?: SourceSelection,
 ): number {
   const def = SERIES[seriesId];
   let total = 0;
   for (const row of rows) {
     if (!inRange(row.metric_date, from, to)) continue;
-    if (rowMatches(row, def)) total += row.count;
+    if (rowMatches(row, def, selection)) total += row.count;
   }
   return total;
+}
+
+/**
+ * Totals per `source` for one metric_key — powers the breakdown cards.
+ * Returns every source present in the data, including ones not in the
+ * documented category list.
+ */
+export function sumBySource(
+  rows: MetricRow[],
+  metricKey: string,
+  from: string,
+  to: string,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const row of rows) {
+    if (row.metric_key !== metricKey) continue;
+    if (!inRange(row.metric_date, from, to)) continue;
+    out[row.source] = (out[row.source] ?? 0) + row.count;
+  }
+  return out;
 }
 
 /** Time series for the trend chart, one key per requested series. */
@@ -73,6 +100,7 @@ export function buildChartData(
   from: string,
   to: string,
   g: Granularity,
+  selection?: SourceSelection,
 ): ChartPoint[] {
   const buckets = bucketsIn(from, to, g);
   const index = new Map<string, ChartPoint>();
@@ -88,7 +116,7 @@ export function buildChartData(
     const point = index.get(bucketOf(row.metric_date, g));
     if (!point) continue;
     for (const id of seriesIds) {
-      if (rowMatches(row, SERIES[id])) {
+      if (rowMatches(row, SERIES[id], selection)) {
         point[id] = (point[id] as number) + row.count;
       }
     }
@@ -97,18 +125,19 @@ export function buildChartData(
   return buckets.map((b) => index.get(b)!);
 }
 
-/** Totals per weekday across the window — powers the "Most Active Day" card. */
+/** Totals per weekday across the window — powers the "Most active day" card. */
 export function buildWeekdayData(
   rows: MetricRow[],
   seriesId: SeriesId,
   from: string,
   to: string,
+  selection?: SourceSelection,
 ): number[] {
   const def = SERIES[seriesId];
   const totals = new Array(7).fill(0);
   for (const row of rows) {
     if (!inRange(row.metric_date, from, to)) continue;
-    if (rowMatches(row, def)) {
+    if (rowMatches(row, def, selection)) {
       totals[weekdayIndex(row.metric_date)] += row.count;
     }
   }
@@ -117,8 +146,8 @@ export function buildWeekdayData(
 
 /**
  * Percent change vs. the preceding window of equal length.
- * Returns null when there is no baseline to compare against, so the UI can say
- * "no prior data" instead of showing a meaningless +100%.
+ * Null when there is no baseline, so the UI can say "no prior data" instead of
+ * showing a meaningless +100%.
  */
 export function deltaPct(current: number, previous: number): number | null {
   if (previous === 0) return current === 0 ? 0 : null;
@@ -138,8 +167,9 @@ export function buildTableData(
   from: string,
   to: string,
   g: Granularity,
+  selection?: SourceSelection,
 ): TableRow[] {
-  const points = buildChartData(rows, seriesIds, from, to, g);
+  const points = buildChartData(rows, seriesIds, from, to, g, selection);
   return points
     .map((p) => {
       const values = {} as Record<SeriesId, number>;
@@ -152,4 +182,50 @@ export function buildTableData(
       return { bucket: p.bucket, label: p.label, values, total };
     })
     .reverse(); // newest first
+}
+
+/** Per-bucket, per-source detail — the CSV export's second sheet-worth of data. */
+export type SourceTableRow = {
+  bucket: string;
+  label: string;
+  metricKey: string;
+  source: string;
+  count: number;
+};
+
+export function buildSourceDetail(
+  rows: MetricRow[],
+  metricKeys: string[],
+  from: string,
+  to: string,
+  g: Granularity,
+): SourceTableRow[] {
+  const acc = new Map<string, SourceTableRow>();
+
+  for (const row of rows) {
+    if (!metricKeys.includes(row.metric_key)) continue;
+    if (!inRange(row.metric_date, from, to)) continue;
+
+    const bucket = bucketOf(row.metric_date, g);
+    const key = `${bucket}|${row.metric_key}|${row.source}`;
+    const existing = acc.get(key);
+    if (existing) {
+      existing.count += row.count;
+    } else {
+      acc.set(key, {
+        bucket,
+        label: labelOf(bucket, g),
+        metricKey: row.metric_key,
+        source: row.source,
+        count: row.count,
+      });
+    }
+  }
+
+  return [...acc.values()].sort(
+    (a, b) =>
+      b.bucket.localeCompare(a.bucket) ||
+      a.metricKey.localeCompare(b.metricKey) ||
+      a.source.localeCompare(b.source),
+  );
 }

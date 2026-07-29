@@ -5,19 +5,16 @@ export type MetricRow = {
   metric_key: string;
   metric_date: string; // YYYY-MM-DD
   count: number;
-  source: string; // "" for funnel metrics, "sms" | "call" | "email" | "form"
+  source: string; // "" when the metric has no breakdown
 };
 
 /**
- * A "series" is one line/number on the dashboard.
- *
- * Not 1:1 with metric_key: in production `ai_conversations` is a single
- * metric_key split across three channels via the `source` column, so it expands
- * into four series (total + one per channel). The handoff doc predates that
- * change — it still describes separate ai_voice_/ai_sms_ keys.
+ * `source` is a generic breakdown dimension, reused per metric — it is NOT
+ * always "where the lead came from". Metrics without a breakdown store an empty
+ * string, never null.
  */
 export type SeriesId =
-  | "form_submissions_total"
+  | "leads_created"
   | "game_plan_call_booked"
   | "consultation_booked"
   | "consultation_won"
@@ -38,19 +35,21 @@ export type SeriesDef = {
 };
 
 /**
- * Categorical slots are assigned in fixed order, top of funnel downward, then
- * AI. Never cycle or re-assign: a reader who learned "orange = Game Plan Calls"
- * must keep that mapping when other series are toggled off.
+ * Categorical slots are assigned in fixed order and never cycled: a reader who
+ * learned "orange = Game Plan Calls" keeps that mapping when other series are
+ * toggled off.
  */
 export const SERIES: Record<SeriesId, SeriesDef> = {
-  form_submissions_total: {
-    id: "form_submissions_total",
-    label: "Form Submissions",
-    short: "Forms",
+  leads_created: {
+    id: "leads_created",
+    label: "Leads Created",
+    short: "Leads",
+    // The metric_key still carries its original name; its meaning widened to
+    // every opportunity created in the day, categorised by lead origin.
     metricKey: "form_submissions_total",
     source: null,
     color: SERIES_SLOTS[0],
-    hint: "Total form submissions captured in GoHighLevel",
+    hint: "All opportunities created, broken down by lead origin",
   },
   game_plan_call_booked: {
     id: "game_plan_call_booked",
@@ -86,7 +85,7 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: null,
     color: SERIES_SLOTS[4],
-    hint: "All AI-started conversations across SMS, voice and email",
+    hint: "Messages exchanged across active voice, SMS and email conversations",
   },
 
   // Channels live in their own card with their own legend, so they restart at
@@ -98,7 +97,7 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: "sms",
     color: SERIES_SLOTS[0],
-    hint: "AI conversations started over SMS",
+    hint: "Messages exchanged over SMS",
   },
   ai_call: {
     id: "ai_call",
@@ -107,7 +106,7 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: "call",
     color: SERIES_SLOTS[1],
-    hint: "AI conversations started over voice call",
+    hint: "Messages exchanged over voice calls",
   },
   ai_email: {
     id: "ai_email",
@@ -116,13 +115,64 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: "email",
     color: SERIES_SLOTS[2],
-    hint: "AI conversations started over email",
+    hint: "Messages exchanged over email",
   },
 };
 
-/** Headline stat tiles, in funnel order. */
+/**
+ * Breakdown categories, per the handoff document.
+ *
+ * Treated as a starting list, not a closed set: anything the workflows write
+ * that isn't here still renders (see `mergeSources`), so a new GHL origin never
+ * silently disappears from the totals.
+ */
+export const LEAD_SOURCES: { value: string; label: string }[] = [
+  { value: "form", label: "Form" },
+  { value: "qr_code", label: "QR code" },
+  { value: "call", label: "Call" },
+  { value: "sms", label: "SMS" },
+  { value: "chat", label: "Chat" },
+  { value: "referral", label: "Referral" },
+  { value: "social", label: "Social" },
+  { value: "other", label: "Other" },
+];
+
+export const AI_CHANNEL_SOURCES: { value: string; label: string }[] = [
+  { value: "call", label: "Voice" },
+  { value: "sms", label: "SMS" },
+  { value: "email", label: "Email" },
+];
+
+/** Turn an unexpected source value into something presentable. */
+export function humanizeSource(value: string): string {
+  const known = [...LEAD_SOURCES, ...AI_CHANNEL_SOURCES].find(
+    (s) => s.value === value,
+  );
+  if (known) return known.label;
+  return value
+    .split(/[_\s-]+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
+ * Known categories first (stable order), then anything else the data contains.
+ * Keeps the card readable while guaranteeing nothing is dropped.
+ */
+export function mergeSources(
+  known: { value: string; label: string }[],
+  present: string[],
+): { value: string; label: string }[] {
+  const extra = present
+    .filter((p) => p !== "" && !known.some((k) => k.value === p))
+    .sort()
+    .map((value) => ({ value, label: humanizeSource(value) }));
+  return [...known, ...extra];
+}
+
+/** Headline stat tiles. */
 export const KPI_SERIES: SeriesId[] = [
-  "form_submissions_total",
+  "leads_created",
   "game_plan_call_booked",
   "consultation_booked",
   "consultation_won",
@@ -133,24 +183,24 @@ export const AI_CHANNELS: SeriesId[] = ["ai_sms", "ai_call", "ai_email"];
 
 /** Everything selectable on the trend chart. */
 export const CHART_SERIES: SeriesId[] = [
-  "form_submissions_total",
+  "leads_created",
   "game_plan_call_booked",
   "consultation_booked",
   "consultation_won",
   "ai_conversations",
 ];
 
-/** The lead-to-member funnel, top to bottom. Order carries meaning. */
+/** The lead-to-member stages, top to bottom. Order carries meaning. */
 export const FUNNEL_SERIES: SeriesId[] = [
-  "form_submissions_total",
+  "leads_created",
   "game_plan_call_booked",
   "consultation_booked",
   "consultation_won",
 ];
 
-/** Every series that appears in the breakdown table. */
+/** Columns of the breakdown table. */
 export const TABLE_SERIES: SeriesId[] = [
-  "form_submissions_total",
+  "leads_created",
   "game_plan_call_booked",
   "consultation_booked",
   "consultation_won",
@@ -159,8 +209,27 @@ export const TABLE_SERIES: SeriesId[] = [
   "ai_email",
 ];
 
-export function rowMatches(row: MetricRow, def: SeriesDef): boolean {
+/**
+ * Per-series source override, set by the dimension filters in the top bar.
+ * `undefined` for a series means "use the series' own default".
+ */
+export type SourceSelection = Partial<Record<SeriesId, string | null>>;
+
+export function effectiveSource(
+  def: SeriesDef,
+  selection?: SourceSelection,
+): string | null {
+  const override = selection?.[def.id];
+  return override !== undefined ? override : def.source;
+}
+
+export function rowMatches(
+  row: MetricRow,
+  def: SeriesDef,
+  selection?: SourceSelection,
+): boolean {
   if (row.metric_key !== def.metricKey) return false;
-  if (def.source === null) return true;
-  return row.source === def.source;
+  const source = effectiveSource(def, selection);
+  if (source === null) return true;
+  return row.source === source;
 }

@@ -9,29 +9,29 @@ import { Skeleton } from "./ui/Skeleton";
  * A single ratio against a limit — a meter, not a gauge chart and not a
  * two-slice pie. The track is the same ramp as the fill.
  *
- * Form submissions -> Game Plan calls is the one genuinely sequential step we
+ * Leads created -> Game Plan calls is the one genuinely sequential step we
  * have. Deliberately NOT won/consultations-booked: `consultation_booked` counts
  * only the $100 modality while `consultation_won` counts every path, so that
  * ratio would compare two different populations.
  *
- * These are period volumes, not a tracked cohort: someone who submits a form
- * today and books next week lands in two different buckets, so the rate can
- * exceed 100%. The arc clamps; the number does not.
+ * These are period volumes, not a tracked cohort: a lead created today that
+ * books next week lands in two different buckets, so the rate can exceed 100%.
+ * The arc clamps; the number does not.
  */
 export function BookingRateMeter({
   calls,
-  submissions,
+  leads,
   loading,
   refetching,
   subtitle,
 }: {
   calls: number;
-  submissions: number;
+  leads: number;
   loading: boolean;
   refetching: boolean;
   subtitle: string;
 }) {
-  const rate = submissions > 0 ? (calls / submissions) * 100 : null;
+  const rate = leads > 0 ? (calls / leads) * 100 : null;
   const clamped = Math.min(rate ?? 0, 100);
 
   const r = 54;
@@ -58,7 +58,7 @@ export function BookingRateMeter({
               role="img"
               aria-label={
                 rate === null
-                  ? "Booking rate unavailable — no form submissions"
+                  ? "Booking rate unavailable — no leads created"
                   : `Booking rate ${formatPct(rate)}`
               }
             >
@@ -87,7 +87,7 @@ export function BookingRateMeter({
 
             <p className="mt-3 text-center text-xs text-ink-muted">
               {rate === null ? (
-                "No form submissions in this period"
+                "No leads created in this period"
               ) : (
                 <>
                   <span className="nums font-medium text-ink-soft">
@@ -95,9 +95,9 @@ export function BookingRateMeter({
                   </span>{" "}
                   Game Plan {calls === 1 ? "call" : "calls"} booked from{" "}
                   <span className="nums font-medium text-ink-soft">
-                    {formatCount(submissions)}
+                    {formatCount(leads)}
                   </span>{" "}
-                  form {submissions === 1 ? "submission" : "submissions"}
+                  {leads === 1 ? "lead" : "leads"} created
                 </>
               )}
             </p>

@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, Gauge, LayoutDashboard, ListFilter, Table2 } from "lucide-react";
+import {
+  Bot,
+  Gauge,
+  LayoutDashboard,
+  ListFilter,
+  Share2,
+  Table2,
+} from "lucide-react";
 import { brand } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 
@@ -9,6 +16,7 @@ const NAV = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "trend", label: "Trend", icon: Gauge },
   { id: "funnel", label: "Stage Volume", icon: ListFilter },
+  { id: "origins", label: "Lead Origins", icon: Share2 },
   { id: "ai", label: "AI Conversations", icon: Bot },
   { id: "breakdown", label: "Breakdown", icon: Table2 },
 ];
