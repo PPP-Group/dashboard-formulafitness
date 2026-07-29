@@ -1,12 +1,103 @@
 "use client";
 
-import { Download, RefreshCw, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, ChevronDown, Download, RefreshCw } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Granularity } from "@/lib/aggregate";
 import { cn } from "@/lib/cn";
 import { brand } from "@/lib/brand";
 import { Logo } from "./Logo";
 import { PeriodPicker } from "./PeriodPicker";
+
+type Option = { value: string | null; label: string };
+
+/**
+ * Dimension filter. Selection is marked by a check; the trigger turns branded
+ * while a filter is active so it reads as "something is narrowing this page"
+ * from across the room.
+ */
+function Dropdown({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  options: Option[];
+  onChange: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const id = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const current = options.find((o) => o.value === value) ?? options[0];
+  const isFiltered = value !== null;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby={id}
+        className={cn(
+          "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+          isFiltered
+            ? "border-brand bg-brand-soft text-brand-dark"
+            : "border-line bg-surface text-ink hover:bg-canvas",
+        )}
+      >
+        <span id={id} className="text-ink-muted">
+          {label}:
+        </span>
+        <span className="font-medium">{current.label}</span>
+        <ChevronDown size={15} className="text-ink-muted" />
+      </button>
+
+      {open ? (
+        <ul
+          role="listbox"
+          className="thin-scroll absolute right-0 z-30 mt-1.5 max-h-72 w-52 overflow-auto rounded-xl border border-line bg-surface py-1 shadow-lg"
+        >
+          {options.map((o) => (
+            <li key={String(o.value)}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={o.value === value}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-canvas"
+              >
+                {o.label}
+                {o.value === value ? (
+                  <Check size={16} strokeWidth={3} className="text-brand-dark" />
+                ) : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
 function freshness(at: Date | null): string {
   if (!at) return "Loading…";
@@ -17,41 +108,6 @@ function freshness(at: Date | null): string {
   return `Updated ${Math.floor(mins / 60)}h ago`;
 }
 
-/**
- * Active-filter chip.
- *
- * The lead-origin filter is set from inside the breakdown card, where the
- * categories and their numbers already live — a second copy of that list as a
- * dropdown up here only cost header height, which on a phone is the scarcest
- * space on the page. The chip exists so a filter set further down the page is
- * still visible (and clearable) from the top; when nothing is filtered it
- * renders nothing at all.
- */
-function FilterChip({
-  label,
-  value,
-  onClear,
-}: {
-  label: string;
-  value: string;
-  onClear: () => void;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-brand bg-brand-soft py-1 pr-1 pl-2.5 text-xs text-brand-dark">
-      <span className="text-ink-muted">{label}:</span>
-      <span className="font-medium">{value}</span>
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label={`Clear ${label.toLowerCase()} filter`}
-        className="rounded-full p-0.5 transition-colors hover:bg-white/70"
-      >
-        <X size={13} strokeWidth={2.5} />
-      </button>
-    </span>
-  );
-}
-
 export function Topbar({
   granularity,
   anchor,
@@ -59,8 +115,8 @@ export function Topbar({
   maxDate,
   onPeriodChange,
   leadSource,
-  onClearLeadSource,
-  leadSourceLabel,
+  onLeadSourceChange,
+  leadSourceOptions,
   lastUpdated,
   loading,
   onRefresh,
@@ -72,8 +128,8 @@ export function Topbar({
   maxDate: string;
   onPeriodChange: (g: Granularity, anchor: string) => void;
   leadSource: string | null;
-  onClearLeadSource: () => void;
-  leadSourceLabel: string;
+  onLeadSourceChange: (v: string | null) => void;
+  leadSourceOptions: Option[];
   lastUpdated: Date | null;
   loading: boolean;
   onRefresh: () => void;
@@ -137,13 +193,12 @@ export function Topbar({
           onChange={onPeriodChange}
         />
 
-        {leadSource ? (
-          <FilterChip
-            label="Origin"
-            value={leadSourceLabel}
-            onClear={onClearLeadSource}
-          />
-        ) : null}
+        <Dropdown
+          label="Lead origin"
+          value={leadSource}
+          options={leadSourceOptions}
+          onChange={onLeadSourceChange}
+        />
       </div>
     </header>
   );

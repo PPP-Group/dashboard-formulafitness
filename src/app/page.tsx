@@ -24,9 +24,11 @@ import {
   CHART_SERIES,
   FUNNEL_SERIES,
   KPI_SERIES,
+  LEAD_SOURCES,
   SourceSelection,
   TABLE_SERIES,
   humanizeSource,
+  mergeSources,
 } from "@/lib/metrics";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { useMetrics } from "@/hooks/useMetrics";
@@ -86,8 +88,17 @@ export default function DashboardPage() {
     const retentionFloor = bucketBounds(minDate, granularity).start;
     const windowStart = trailStart < retentionFloor ? retentionFloor : trailStart;
 
-    // Lead origin is the only filterable dimension; the per-channel series ARE
-    // the AI breakdown and keep their own fixed source.
+    /**
+     * `form_submissions_total` is the ONLY metric carrying an origin breakdown.
+     * So a lead-origin filter can scope the Leads metric and nothing else — it
+     * is applied where Leads stands on its own (its KPI tile, its line on the
+     * chart, its table column) and deliberately NOT to anything that puts Leads
+     * side by side with another metric.
+     *
+     * Mixing the two scopes is what produced a 200% booking rate: a filtered
+     * denominator (leads from one origin) under an unfilterable numerator (all
+     * Game Plan calls). Those cards read unfiltered totals and say so.
+     */
     const selection: SourceSelection = { leads_created: leadSource };
 
     const spark = buildChartData(
@@ -111,12 +122,20 @@ export default function DashboardPage() {
     });
 
     // Weekday needs a span to be meaningful, so it reads the trend window
-    // rather than the selected bucket.
+    // rather than the selected bucket. Cross-metric sum → no origin filter.
     const weekday = FUNNEL_SERIES.map((id) =>
-      buildWeekdayData(rows, id, windowStart, to, selection),
+      buildWeekdayData(rows, id, windowStart, to),
     ).reduce((acc, cur) => acc.map((v, i) => v + cur[i]), new Array(7).fill(0));
 
     const leadTotals = sumBySource(rows, LEADS_KEY, from, to);
+
+    const leadSourceOptions = [
+      { value: null as string | null, label: "All origins" },
+      ...mergeSources(LEAD_SOURCES, Object.keys(leadTotals)).map((s) => ({
+        value: s.value as string | null,
+        label: s.label,
+      })),
+    ];
 
     return {
       from,
@@ -125,6 +144,7 @@ export default function DashboardPage() {
       kpis,
       weekday,
       leadTotals,
+      leadSourceOptions,
       tableRows: buildTableData(
         rows,
         TABLE_SERIES,
@@ -154,12 +174,11 @@ export default function DashboardPage() {
         to,
         granularity,
       ),
-      funnel: FUNNEL_SERIES.map((id) =>
-        sumInRange(rows, id, from, to, selection),
-      ),
+      // Cross-metric comparisons: unfiltered on both sides, always.
+      funnel: FUNNEL_SERIES.map((id) => sumInRange(rows, id, from, to)),
       ai: AI_CHANNELS.map((id) => sumInRange(rows, id, from, to)),
-      calls: sumInRange(rows, "game_plan_call_booked", from, to, selection),
-      leads: sumInRange(rows, "leads_created", from, to, selection),
+      calls: sumInRange(rows, "game_plan_call_booked", from, to),
+      leads: sumInRange(rows, "leads_created", from, to),
     };
   }, [rows, anchor, granularity, leadSource, today, minDate]);
 
@@ -167,7 +186,13 @@ export default function DashboardPage() {
   const filterNote = leadSource
     ? `origin: ${humanizeSource(leadSource)}`
     : "";
-  const scopedLabel = filterNote ? `${periodLabel} · ${filterNote}` : periodLabel;
+  /**
+   * For cross-metric views it cannot reach — saying "all origins" out loud is
+   * what stops the reader assuming the filter applied here too.
+   */
+  const unscopedLabel = leadSource
+    ? `${periodLabel} · all origins`
+    : periodLabel;
 
   // Counted from what actually rendered, so the caption can't overstate the span.
   const unit =
@@ -197,8 +222,8 @@ export default function DashboardPage() {
           maxDate={today}
           onPeriodChange={handlePeriodChange}
           leadSource={leadSource}
-          onClearLeadSource={() => setLeadSource(null)}
-          leadSourceLabel={leadSource ? humanizeSource(leadSource) : ""}
+          onLeadSourceChange={setLeadSource}
+          leadSourceOptions={view.leadSourceOptions}
           lastUpdated={lastUpdated}
           loading={loading}
           onRefresh={refresh}
@@ -268,7 +293,7 @@ export default function DashboardPage() {
                 totals={view.funnel}
                 loading={firstLoad}
                 refetching={refetching}
-                subtitle={scopedLabel}
+                subtitle={unscopedLabel}
               />
             </section>
 
@@ -299,16 +324,17 @@ export default function DashboardPage() {
             <BookingRateMeter
               calls={view.calls}
               leads={view.leads}
+              originFilterActive={!!leadSource}
               loading={firstLoad}
               refetching={refetching}
-              subtitle={scopedLabel}
+              subtitle={unscopedLabel}
             />
             <div className="lg:col-span-2">
               <WeekdayCard
                 totals={view.weekday}
                 loading={firstLoad}
                 refetching={refetching}
-                subtitle={`Pipeline activity · ${trendLabel}`}
+                subtitle={`Pipeline activity · ${trendLabel}${leadSource ? " · all origins" : ""}`}
               />
             </div>
           </div>

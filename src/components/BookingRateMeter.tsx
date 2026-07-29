@@ -21,12 +21,15 @@ import { Skeleton } from "./ui/Skeleton";
 export function BookingRateMeter({
   calls,
   leads,
+  originFilterActive = false,
   loading,
   refetching,
   subtitle,
 }: {
   calls: number;
   leads: number;
+  /** Only to explain why this card ignores the filter — never to change the maths. */
+  originFilterActive?: boolean;
   loading: boolean;
   refetching: boolean;
   subtitle: string;
@@ -105,6 +108,13 @@ export function BookingRateMeter({
             <p className="mt-2 text-center text-[11px] text-ink-faint">
               Period volumes, not a tracked cohort
             </p>
+
+            {originFilterActive ? (
+              <p className="mt-2 text-center text-[11px] leading-relaxed text-ink-faint">
+                Game Plan calls carry no origin breakdown, so this rate always
+                counts every origin.
+              </p>
+            ) : null}
           </>
         )}
       </div>

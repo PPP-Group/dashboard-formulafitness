@@ -132,11 +132,15 @@ export function LeadSourceCard({
               })}
             </ul>
 
-            <p className="mt-4 flex items-center gap-1.5 text-[11px] leading-relaxed text-ink-faint">
-              <Filter size={11} aria-hidden="true" />
+            {/*
+              Deliberately says "the Leads metric" and not "the dashboard":
+              origin only exists on this metric, so that is the honest scope.
+            */}
+            <p className="mt-4 flex items-start gap-1.5 text-[11px] leading-relaxed text-ink-faint">
+              <Filter size={11} className="mt-0.5 shrink-0" aria-hidden="true" />
               {selected
-                ? "Filtering the dashboard by this origin — click again to clear."
-                : "Click an origin to filter the whole dashboard by it."}
+                ? "Scoping the Leads metric to this origin — click again to clear."
+                : "Click an origin to scope the Leads metric to it. Other metrics carry no origin breakdown."}
             </p>
           </>
         )}
