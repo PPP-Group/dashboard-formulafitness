@@ -54,26 +54,28 @@ needs it to mean. Metrics without a breakdown store an **empty string**, never
 
 ### The eight lead origins
 
-| `source` slug | Label shown | Writing yet? |
+Slugs are derived from the literal `source` string GoHighLevel puts on an
+opportunity, verified against the live API on 2026-07-30:
+
+| GHL `source` | slug | Label shown |
 |---|---|---|
-| `form` | Website Form | yes |
-| `call` | AI Voice Call | — |
-| `sms` | SMS Inbound | yes |
-| `qr_code` | QR Code | — |
-| `referral` | Referral | — |
-| `tony_tran_old_lead` | Tony Tran Old Lead | not yet |
-| `tony_tran_website` | Tony Tran Website | not yet |
-| `email_inbound` | Email Inbound | not yet |
+| `Website Form` | `website_form` | Website Form |
+| `AI Voice Call` | `ai_voice_call` | AI Voice Call |
+| `SMS Inbound` | `sms_inbound` | SMS Inbound |
+| `QR Code` | `qr_code` | QR Code |
+| `Referral` | `referral` | Referral |
+| `Tony Tran Old Lead` | `old_lead` | Old Lead |
+| `Tony Tran Website` | `tony_tran_website` | Tony Tran Website |
+| `Email Inbound` | `email_inbound` | Email Inbound |
 
-Slugs are intentionally **not** renamed to match their labels: `form`, `call` and
-`sms` already carry production rows, and renaming them would orphan that data
-until the n8n workflow changed in lockstep. The label is what anyone reads; the
-slug is only the join key.
+"Tony Tran Old Lead" is shortened to **Old Lead** — the prefix carried no
+meaning. "Tony Tran Website" keeps its prefix: shortened to "Website" it would
+read as a duplicate of "Website Form" while being a different origin entirely.
 
-The last three are new — they render zero until the workflow starts emitting
-them. Nothing breaks in the meantime, and `mergeSources()` means a slug that
-isn't on this list still appears (title-cased) rather than vanishing from a
-total.
+The n8n workflow maps these by exact string match. Anything it doesn't
+recognise is slugified rather than bucketed as "other", so a new GHL origin
+stays distinguishable; `mergeSources()` then renders it title-cased instead of
+dropping it from the total.
 
 `source` vocabularies overlap across metrics — `call` is "AI Voice Call" as a
 lead origin but "Voice" as a conversation channel — so `humanizeSource()` takes

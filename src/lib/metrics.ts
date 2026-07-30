@@ -122,27 +122,30 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
 export type SourceOption = { value: string; label: string };
 
 /**
- * The eight ways a lead can arrive, as defined by the client.
+ * The ways a lead can arrive. Slugs match exactly what the n8n workflow writes
+ * into `source`, which in turn maps the literal `source` strings GoHighLevel
+ * returns on an opportunity — verified against the live API on 2026-07-30.
  *
- * Slugs are the values n8n writes into `source` — deliberately NOT renamed to
- * match the labels. `form`, `call` and `sms` already carry production data, and
- * renaming them would orphan it until the workflow was changed in lockstep.
- * The label is what anyone reads; the slug is just the join key.
+ * Two labels are shortened from the GHL originals:
+ *   "Tony Tran Old Lead" → "Old Lead"  (the prefix carried no meaning here)
+ *   "Tony Tran Website"  → kept in full, because shortening it to "Website"
+ *                          would read as a duplicate of "Website Form" while
+ *                          being a different origin entirely.
  *
- * `tony_tran_old_lead`, `tony_tran_website` and `email_inbound` are new: they
- * will read zero until the workflow starts emitting them.
+ * `email_inbound` is the one entry with no data yet: it is on the client's
+ * list and mapped in the workflow, but no opportunity has arrived through it.
  *
  * A starting list, not a closed set — anything the workflow writes that isn't
  * here still renders (see `mergeSources`), so an unplanned origin never
  * silently vanishes from a total.
  */
 export const LEAD_SOURCES: SourceOption[] = [
-  { value: "form", label: "Website Form" },
-  { value: "call", label: "AI Voice Call" },
-  { value: "sms", label: "SMS Inbound" },
+  { value: "website_form", label: "Website Form" },
+  { value: "ai_voice_call", label: "AI Voice Call" },
+  { value: "sms_inbound", label: "SMS Inbound" },
   { value: "qr_code", label: "QR Code" },
   { value: "referral", label: "Referral" },
-  { value: "tony_tran_old_lead", label: "Tony Tran Old Lead" },
+  { value: "old_lead", label: "Old Lead" },
   { value: "tony_tran_website", label: "Tony Tran Website" },
   { value: "email_inbound", label: "Email Inbound" },
 ];
