@@ -42,19 +42,6 @@ export const SERIES_SLOTS = [
   "#e87ba4", // 5 — magenta
 ] as const;
 
-/**
- * Ordinal ramp for the funnel — stage order is meaning, so it takes one hue in
- * monotone lightness steps rather than five identities. Every step is an
- * official Formula Fitness blue. Validated with --ordinal: monotone L, adjacent
- * ΔL ≥ 0.06, light end 2.62:1 on white.
- */
-export const FUNNEL_RAMP = [
-  "#6f9ffa",
-  "#467ff7",
-  "#2f6adf",
-  "#2252c9",
-] as const;
-
 /** Chart chrome and ink. Every text value clears WCAG AA on white. */
 export const viz = {
   surface: "#ffffff",

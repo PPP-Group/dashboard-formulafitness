@@ -9,32 +9,33 @@ import { Skeleton } from "./ui/Skeleton";
  * A single ratio against a limit — a meter, not a gauge chart and not a
  * two-slice pie. The track is the same ramp as the fill.
  *
- * Leads created -> Game Plan calls is the one genuinely sequential step we
- * have. Deliberately NOT won/consultations-booked: `consultation_booked` counts
- * only the $100 modality while `consultation_won` counts every path, so that
- * ratio would compare two different populations.
+ * This is a genuine cohort rate, computed from `lead_journey` (one row per
+ * opportunity): of the leads CREATED in the selected period, how many booked
+ * a Game Plan call within that SAME period — not "ever, on any date". A lead
+ * created today that books next week does not count toward today's rate; it
+ * counts toward next week's, the day it's inside that window. This is why the
+ * rate can never exceed 100% (unlike the old metrics_daily-based version,
+ * which compared two independently-counted totals and could).
  *
- * These are period volumes, not a tracked cohort: a lead created today that
- * books next week lands in two different buckets, so the rate can exceed 100%.
- * The arc clamps; the number does not.
+ * `lead_journey` only captures a stage date the first time an opportunity is
+ * observed sitting in that stage (the GHL API exposes no full stage-history
+ * log), so very recent activity may be under-counted until the hourly sync
+ * has had a chance to observe it.
  */
 export function BookingRateMeter({
-  calls,
+  booked,
   leads,
-  originFilterActive = false,
   loading,
   refetching,
   subtitle,
 }: {
-  calls: number;
+  booked: number;
   leads: number;
-  /** Only to explain why this card ignores the filter — never to change the maths. */
-  originFilterActive?: boolean;
   loading: boolean;
   refetching: boolean;
   subtitle: string;
 }) {
-  const rate = leads > 0 ? (calls / leads) * 100 : null;
+  const rate = leads > 0 ? (booked / leads) * 100 : null;
   const clamped = Math.min(rate ?? 0, 100);
 
   const r = 54;
@@ -42,7 +43,7 @@ export function BookingRateMeter({
   const dash = (clamped / 100) * circumference;
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex h-full flex-col">
       <CardHeader title="Booking rate" subtitle={subtitle} />
 
       <div
@@ -94,27 +95,22 @@ export function BookingRateMeter({
               ) : (
                 <>
                   <span className="nums font-medium text-ink-soft">
-                    {formatCount(calls)}
+                    {formatCount(booked)}
                   </span>{" "}
-                  Game Plan {calls === 1 ? "call" : "calls"} booked from{" "}
+                  of{" "}
                   <span className="nums font-medium text-ink-soft">
                     {formatCount(leads)}
                   </span>{" "}
-                  {leads === 1 ? "lead" : "leads"} created
+                  {leads === 1 ? "lead" : "leads"} booked a Game Plan call in
+                  this same period
                 </>
               )}
             </p>
 
             <p className="mt-2 text-center text-[11px] text-ink-faint">
-              Period volumes, not a tracked cohort
+              Cohort rate — counts a booking only if it happened within the
+              period the lead was created
             </p>
-
-            {originFilterActive ? (
-              <p className="mt-2 text-center text-[11px] leading-relaxed text-ink-faint">
-                Game Plan calls carry no origin breakdown, so this rate always
-                counts every origin.
-              </p>
-            ) : null}
           </>
         )}
       </div>

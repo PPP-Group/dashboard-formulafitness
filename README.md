@@ -89,11 +89,14 @@ one category (`source = 'form'`). The UI therefore calls the total **Leads
 Created** and exposes the categories as a filter, so nobody reads the total as a
 form count.
 
-**`ai_conversations` counts messages, not conversations,** and is not filtered by
-AI authorship — the GHL API has no reliable per-message AI marker for SMS or
-email. It counts every message exchanged in active conversations on the three
-channels. The AI replies to all of them, which is why the card keeps the "AI
-Conversations" name; the caption states the unit.
+**`ai_conversations` is not filtered by AI authorship** — the GHL API has no
+reliable per-message AI marker for SMS or email, so it counts every message
+exchanged in active conversations. It also isn't counted the same way on every
+channel: SMS and email count **activations** (once per conversation per day,
+however many messages that thread had — the AI activates once and then keeps
+replying to whatever comes next), while **voice stays a raw message count**, per
+the client's explicit request. See `Count Messages By Channel` in the
+`GHL - AI Conversations` n8n workflow.
 
 Category lists are treated as open, not closed: `mergeSources()` renders any
 `source` value the workflows write, even one not listed above, so a new GHL
@@ -118,28 +121,95 @@ midnight and shifts the day backwards for any viewer west of UTC. See
 The 90-day cleanup workflow does not exist yet. The client caps its own fetch at
 400 days and pages through results, so nothing breaks while data accumulates.
 
+## `lead_journey` — the cohort table
+
+`metrics_daily` is a daily aggregate: it can say "3 leads were created today"
+and, separately, "1 Game Plan call was booked today," but it cannot say whether
+that 1 booking came from one of those 3 leads or from a lead created last week.
+Cohort questions — "of the leads created in period X, how many of *those*
+booked, no matter which day within X they booked on" — need a second row of
+history per opportunity, not a count.
+
+`public.lead_journey` (also Supabase, same RLS shape: public `SELECT`, writes
+only via `service_role`) has one row per GHL opportunity:
+
+| Column | Notes |
+|---|---|
+| `ghl_opportunity_id` | the GHL opportunity's own id |
+| `source` | lead origin, same slugs as `metrics_daily` |
+| `created_date` | the opportunity's `createdAt`, in LA time |
+| `game_plan_booked_date` | date it first entered the Game Plan stage, or `null` |
+| `consultation_booked_date` | same, for the $100 Consultation stage |
+| `closed_won_date` | same, for Closed Won |
+
+**The important limitation:** the GHL opportunities API exposes only an
+opportunity's *current* stage and when it entered that stage — never a full
+stage-history log. So a stage date can only be captured while the hourly sync
+(`GHL - Lead Journey Sync`) happens to observe an opportunity sitting in that
+exact stage. Once captured, a date is never cleared or overwritten (the sync's
+`Merge Journey Dates` step always prefers the already-stored value), so a lead
+that moves through stages faster than the hourly poll can still end up with an
+earlier date left `null` even though it did pass through that stage. This is a
+best-effort forward-looking capture, not a full historical reconstruction —
+acceptable here because the retention window is short and stage changes are
+infrequent, but worth knowing if the numbers seem short by a few units.
+
+The dashboard's **Booking rate** card is the only consumer today
+(`src/lib/journey.ts`, `src/hooks/useLeadJourney.ts`): for the selected period
+`[from, to]`, `leads` = opportunities with `created_date` in that window, and
+`booked` = the subset of those with `game_plan_booked_date` *also* in that same
+window. A lead created today that books next week does not count toward
+today's rate; it counts toward next week's. Because `lead_journey` carries
+`source` per row, this is also the one card the lead-origin filter can scope
+correctly end to end.
+
 ## Chart colors
 
 The palette is derived from the official Formula Fitness site and **validated**,
 not hand-picked — OKLab CVD separation, lightness band, chroma floor and contrast
-against the white card surface. Two deliberate choices:
-
-- **Stage volume** uses a single-hue ordinal ramp: stage order carries meaning.
-- **Lead origins** are ranked bars in one hue, not eight colours. The categories
-  are nominal, so colouring them separately would re-encode what bar length
-  already shows, and eight classes is past where adjacent hues stay distinct.
+against the white card surface. One deliberate choice: **lead origins** are
+ranked bars in one hue, not eight colours. The categories are nominal, so
+colouring them separately would re-encode what bar length already shows, and
+eight classes is past where adjacent hues stay distinct.
 
 Values and rationale live in `src/lib/brand.ts`; re-run the validator before
 changing any of them.
 
 ## Caveats surfaced in the UI
 
-Stage-to-stage percentages are deliberately absent. The four stages are not a
-strict sequence — `consultation_booked` counts only the $100 modality and an
-opportunity can reach Closed Won without it — and the metrics count stage entries
-per day rather than following a cohort, so any conversion rate across them is
-approximate. The one genuinely sequential step, leads created → Game Plan calls,
-is shown as **Booking rate** with that caveat printed on the card.
+**Booking rate** is a genuine cohort rate (see `lead_journey` above): it can
+never exceed 100%, because the denominator and numerator are drawn from the
+same set of leads over the same window, not two independently-aggregated
+totals. Its caption says so.
+
+There is no "Consultations → Closed Won" conversion percentage anywhere on the
+dashboard, deliberately: `consultation_booked` counts only the $100 modality,
+and an opportunity can reach Closed Won without ever passing through it, so a
+stage-to-stage percentage there would be fiction.
+
+## n8n gotcha: built-in pagination breaks httpHeaderAuth on this instance
+
+The `GHL - Lead Journey Sync` workflow needs every opportunity in the pipeline,
+not just today's, so it has to page through GHL's `/opportunities/search`
+beyond the 100-per-request limit. The HTTP Request node's built-in
+`options.pagination` (used successfully in the five other GHL workflows here)
+made every request to this node come back `403 The token does not have access
+to this location` — reproduced with the exact same credential and query
+params that succeed with pagination off, and with a second credential too, so
+it isn't a token or scope problem. Enabling pagination forces
+`resolveWithFullResponse: true` internally, and something about that codepath
+breaks the `genericCredentialType` / `httpHeaderAuth` credential injection on
+this n8n instance.
+
+The workaround (already in place, no action needed): the sync workflow
+implements pagination manually — `Fetch One Page` (no `options.pagination`,
+constant URL, `sendQuery: true` always, `specifyQuery: "json"` with the query
+object built by an upstream Code node) into `Track Pages` (accumulates pages
+in `$getWorkflowStaticData('global')`, decides whether to continue) into an
+`IF` node that loops back to `Fetch One Page` on more-pages and forward to
+`Build Journey Rows` when done. If a future workflow needs >100 records from
+an `httpHeaderAuth`-authenticated endpoint, copy this pattern rather than
+reaching for the built-in pagination option.
 
 ## Deploying
 

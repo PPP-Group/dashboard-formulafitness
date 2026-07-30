@@ -9,10 +9,13 @@ import { Skeleton } from "./ui/Skeleton";
  * Part-to-whole across the three channels. Read-only by design — the channel
  * split is information, not a filter dimension.
  *
- * The underlying metric counts every message exchanged in active conversations
- * — the AI replies to all of them, which is why the card keeps the "AI
- * Conversations" name, but the unit is messages, not conversation threads. The
- * caption says so rather than leaving the reader to assume.
+ * The three channels are counted two different ways. SMS and email count
+ * activations: one per conversation per day, however many messages that
+ * conversation had — a 10-text back-and-forth counts the same as a single
+ * text, because the AI activates once per thread and then keeps replying to
+ * whatever comes next. Voice is left as a raw message count, per the client's
+ * explicit request. The caption states this rather than leaving the reader to
+ * assume they're all counted the same way.
  */
 export function AiChannelsCard({
   totals,
@@ -55,7 +58,7 @@ export function AiChannelsCard({
                 {formatCount(total)}
               </p>
               <p className="mt-1 text-xs text-ink-muted">
-                messages exchanged across active conversations
+                AI activations — SMS/email per conversation, voice per message
               </p>
 
               {/* 2px surface gaps separate segments — no borders around marks. */}
@@ -111,7 +114,7 @@ export function AiChannelsCard({
 
             {total === 0 ? (
               <p className="mt-4 text-xs text-ink-muted">
-                No messages in this period.
+                No AI activity in this period.
               </p>
             ) : null}
           </>

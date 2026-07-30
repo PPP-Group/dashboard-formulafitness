@@ -25,7 +25,7 @@ export function WeekdayCard({
   const peak = max > 0 ? totals.indexOf(max) : -1;
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex h-full flex-col">
       <CardHeader title="Most active day" subtitle={subtitle} />
 
       <div className={cn("flex-1 px-5 pt-2 pb-5", refetching && "refetching")}>

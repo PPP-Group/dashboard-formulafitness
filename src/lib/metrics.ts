@@ -71,12 +71,13 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
   },
   consultation_won: {
     id: "consultation_won",
-    label: "Consultations Won",
-    short: "Consults Won",
+    label: "Closed Won",
+    short: "Closed Won",
+    // metric_key is unchanged — only the label shown to the client changed.
     metricKey: "consultation_won",
     source: null,
     color: SERIES_SLOTS[3],
-    hint: "Opportunities entering “Closed Won” — signed up for a program",
+    hint: "Opportunities entering the “Closed Won” stage — signed up for a program",
   },
   ai_conversations: {
     id: "ai_conversations",
@@ -85,7 +86,7 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: null,
     color: SERIES_SLOTS[4],
-    hint: "Messages exchanged across active voice, SMS and email conversations",
+    hint: "AI activations across voice, SMS and email — voice counted per message, SMS/email counted once per conversation per day",
   },
 
   // Channels live in their own card with their own legend, so they restart at
@@ -97,7 +98,9 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: "sms",
     color: SERIES_SLOTS[0],
-    hint: "Messages exchanged over SMS",
+    // One activation per conversation per day, not one per message — a
+    // back-and-forth thread with 10 texts counts once, the same as one with 1.
+    hint: "Conversations where the AI was activated over SMS",
   },
   ai_call: {
     id: "ai_call",
@@ -115,7 +118,8 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: "email",
     color: SERIES_SLOTS[2],
-    hint: "Messages exchanged over email",
+    // Same per-conversation-per-day counting as SMS.
+    hint: "Conversations where the AI was activated over email",
   },
 };
 
@@ -219,14 +223,6 @@ export const CHART_SERIES: SeriesId[] = [
   "consultation_booked",
   "consultation_won",
   "ai_conversations",
-];
-
-/** The lead-to-member stages, top to bottom. Order carries meaning. */
-export const FUNNEL_SERIES: SeriesId[] = [
-  "leads_created",
-  "game_plan_call_booked",
-  "consultation_booked",
-  "consultation_won",
 ];
 
 /** Columns of the breakdown table. */

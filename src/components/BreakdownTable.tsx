@@ -66,12 +66,6 @@ export function BreakdownTable({
                       </span>
                     </th>
                   ))}
-                  <th
-                    scope="col"
-                    className="px-5 py-2.5 text-right text-xs font-medium whitespace-nowrap text-ink-muted"
-                  >
-                    Total
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -97,9 +91,6 @@ export function BreakdownTable({
                         {formatCount(row.values[id])}
                       </td>
                     ))}
-                    <td className="nums px-5 py-2.5 text-right font-semibold whitespace-nowrap text-ink">
-                      {formatCount(row.total)}
-                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -22,7 +22,6 @@ import {
 import {
   AI_CHANNELS,
   CHART_SERIES,
-  FUNNEL_SERIES,
   KPI_SERIES,
   LEAD_SOURCES,
   SourceSelection,
@@ -31,11 +30,12 @@ import {
   mergeSources,
 } from "@/lib/metrics";
 import { downloadCsv, toCsv } from "@/lib/csv";
+import { cohortBookingRate } from "@/lib/journey";
+import { useLeadJourney } from "@/hooks/useLeadJourney";
 import { useMetrics } from "@/hooks/useMetrics";
 import { AiChannelsCard } from "@/components/AiChannelsCard";
 import { BookingRateMeter } from "@/components/BookingRateMeter";
 import { BreakdownTable } from "@/components/BreakdownTable";
-import { FunnelCard } from "@/components/FunnelCard";
 import { KpiCard } from "@/components/KpiCard";
 import { LeadSourceCard } from "@/components/LeadSourceCard";
 import { Topbar } from "@/components/Topbar";
@@ -57,6 +57,12 @@ const TRAIL: Record<Granularity, number> = {
 
 export default function DashboardPage() {
   const { rows, loading, error, lastUpdated, refresh } = useMetrics();
+  const {
+    rows: journeyRows,
+    loading: journeyLoading,
+    error: journeyError,
+    refresh: refreshJourney,
+  } = useLeadJourney();
   const [granularity, setGranularity] = useState<Granularity>("daily");
   const [anchor, setAnchor] = useState<string>(() => todayInGymTz());
   const [leadSource, setLeadSource] = useState<string | null>(null);
@@ -64,6 +70,11 @@ export default function DashboardPage() {
   // First load shows skeletons; later polls hold the previous render instead.
   const firstLoad = loading && rows.length === 0 && !error;
   const refetching = loading && rows.length > 0;
+  // lead_journey loads on its own schedule — a fresh table starts empty and
+  // fills in as the sync workflow runs, independent of metrics_daily.
+  const journeyFirstLoad =
+    journeyLoading && journeyRows.length === 0 && !journeyError;
+  const journeyRefetching = journeyLoading && journeyRows.length > 0;
 
   const today = todayInGymTz();
   const minDate = addDays(today, -(RETENTION_DAYS - 1));
@@ -122,10 +133,17 @@ export default function DashboardPage() {
     });
 
     // Weekday needs a span to be meaningful, so it reads the trend window
-    // rather than the selected bucket. Cross-metric sum → no origin filter.
-    const weekday = FUNNEL_SERIES.map((id) =>
-      buildWeekdayData(rows, id, windowStart, to),
-    ).reduce((acc, cur) => acc.map((v, i) => v + cur[i]), new Array(7).fill(0));
+    // rather than the selected bucket. Measures lead arrivals only — not a
+    // sum across the pipeline — so it answers "which day do leads show up",
+    // not some blend of unrelated stage counts. Single-metric, so the origin
+    // filter DOES reach it, unlike the cross-metric cards below.
+    const weekday = buildWeekdayData(
+      rows,
+      "leads_created",
+      windowStart,
+      to,
+      selection,
+    );
 
     const leadTotals = sumBySource(rows, LEADS_KEY, from, to);
 
@@ -175,24 +193,19 @@ export default function DashboardPage() {
         granularity,
       ),
       // Cross-metric comparisons: unfiltered on both sides, always.
-      funnel: FUNNEL_SERIES.map((id) => sumInRange(rows, id, from, to)),
       ai: AI_CHANNELS.map((id) => sumInRange(rows, id, from, to)),
-      calls: sumInRange(rows, "game_plan_call_booked", from, to),
-      leads: sumInRange(rows, "leads_created", from, to),
+      // From lead_journey, not metrics_daily: a genuine cohort rate (booked
+      // within the SAME window the lead was created), and — since
+      // lead_journey carries `source` per opportunity — one the origin filter
+      // can actually reach.
+      bookingRate: cohortBookingRate(journeyRows, from, to, leadSource),
     };
-  }, [rows, anchor, granularity, leadSource, today, minDate]);
+  }, [rows, journeyRows, anchor, granularity, leadSource, today, minDate]);
 
   const periodLabel = formatBucketLabel(anchor, granularity);
   const filterNote = leadSource
     ? `origin: ${humanizeSource(leadSource, LEADS_KEY)}`
     : "";
-  /**
-   * For cross-metric views it cannot reach — saying "all origins" out loud is
-   * what stops the reader assuming the filter applied here too.
-   */
-  const unscopedLabel = leadSource
-    ? `${periodLabel} · all origins`
-    : periodLabel;
 
   // Counted from what actually rendered, so the caption can't overstate the span.
   const unit =
@@ -225,13 +238,16 @@ export default function DashboardPage() {
           onLeadSourceChange={setLeadSource}
           leadSourceOptions={view.leadSourceOptions}
           lastUpdated={lastUpdated}
-          loading={loading}
-          onRefresh={refresh}
+          loading={loading || journeyLoading}
+          onRefresh={() => {
+            refresh();
+            refreshJourney();
+          }}
           onExport={handleExport}
         />
 
         <main className="flex-1 space-y-5 px-4 py-5 sm:px-6">
-          {error ? (
+          {error || journeyError ? (
             <div
               role="alert"
               className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-4"
@@ -246,11 +262,14 @@ export default function DashboardPage() {
                   Couldn’t load metrics
                 </p>
                 <p className="mt-0.5 text-sm break-words text-ink-soft">
-                  {error}
+                  {error || journeyError}
                 </p>
                 <button
                   type="button"
-                  onClick={refresh}
+                  onClick={() => {
+                    refresh();
+                    refreshJourney();
+                  }}
                   className="mt-2 text-sm font-medium text-brand-dark underline underline-offset-2"
                 >
                   Try again
@@ -286,17 +305,7 @@ export default function DashboardPage() {
             />
           </section>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            <section id="funnel" className="scroll-mt-32">
-              <h2 className="sr-only">Stage volume</h2>
-              <FunnelCard
-                totals={view.funnel}
-                loading={firstLoad}
-                refetching={refetching}
-                subtitle={unscopedLabel}
-              />
-            </section>
-
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <section id="origins" className="scroll-mt-32">
               <h2 className="sr-only">Leads by origin</h2>
               <LeadSourceCard
@@ -322,19 +331,20 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             <BookingRateMeter
-              calls={view.calls}
-              leads={view.leads}
-              originFilterActive={!!leadSource}
-              loading={firstLoad}
-              refetching={refetching}
-              subtitle={unscopedLabel}
+              booked={view.bookingRate.booked}
+              leads={view.bookingRate.leads}
+              loading={journeyFirstLoad}
+              refetching={journeyRefetching}
+              subtitle={filterNote ? `${periodLabel} · ${filterNote}` : periodLabel}
             />
             <div className="lg:col-span-2">
               <WeekdayCard
                 totals={view.weekday}
                 loading={firstLoad}
                 refetching={refetching}
-                subtitle={`Pipeline activity · ${trendLabel}${leadSource ? " · all origins" : ""}`}
+                subtitle={
+                  filterNote ? `${trendLabel} · ${filterNote}` : trendLabel
+                }
               />
             </div>
           </div>
@@ -349,11 +359,6 @@ export default function DashboardPage() {
               subtitle={filterNote ? `${trendLabel} · ${filterNote}` : trendLabel}
             />
           </section>
-
-          <p className="pb-2 text-center text-xs text-ink-muted">
-            Collected hourly from GoHighLevel via n8n · roughly 90 days of
-            history retained
-          </p>
         </main>
       </div>
     </div>
