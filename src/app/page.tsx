@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import {
   Granularity,
@@ -55,7 +56,8 @@ const TRAIL: Record<Granularity, number> = {
   monthly: 12,
 };
 
-export default function DashboardPage() {
+function DashboardPageInner() {
+  const searchParams = useSearchParams();
   const { rows, loading, error, lastUpdated, refresh } = useMetrics();
   const {
     rows: journeyRows,
@@ -63,8 +65,32 @@ export default function DashboardPage() {
     error: journeyError,
     refresh: refreshJourney,
   } = useLeadJourney();
-  const [granularity, setGranularity] = useState<Granularity>("daily");
-  const [anchor, setAnchor] = useState<string>(() => todayInGymTz());
+
+  const today = todayInGymTz();
+  const minDate = addDays(today, -(RETENTION_DAYS - 1));
+
+  // Lets a report link (email/Slack) open the dashboard already scoped to the
+  // period it summarized, instead of always landing on "today".
+  const paramGranularity = searchParams.get("granularity");
+  const initialGranularity: Granularity =
+    paramGranularity === "daily" ||
+    paramGranularity === "weekly" ||
+    paramGranularity === "monthly"
+      ? paramGranularity
+      : "daily";
+  const paramAnchor = searchParams.get("anchor");
+  const initialAnchor: string =
+    paramAnchor && /^\d{4}-\d{2}-\d{2}$/.test(paramAnchor)
+      ? paramAnchor < minDate
+        ? minDate
+        : paramAnchor > today
+          ? today
+          : paramAnchor
+      : today;
+
+  const [granularity, setGranularity] =
+    useState<Granularity>(initialGranularity);
+  const [anchor, setAnchor] = useState<string>(initialAnchor);
   const [leadSource, setLeadSource] = useState<string | null>(null);
 
   // First load shows skeletons; later polls hold the previous render instead.
@@ -75,9 +101,6 @@ export default function DashboardPage() {
   const journeyFirstLoad =
     journeyLoading && journeyRows.length === 0 && !journeyError;
   const journeyRefetching = journeyLoading && journeyRows.length > 0;
-
-  const today = todayInGymTz();
-  const minDate = addDays(today, -(RETENTION_DAYS - 1));
 
   const view = useMemo(() => {
     // The selected bucket is what every headline number reports on.
@@ -362,5 +385,16 @@ export default function DashboardPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  // useSearchParams requires a Suspense boundary above it for production
+  // builds — the whole page is already client-rendered, so an empty
+  // fallback is invisible in practice.
+  return (
+    <Suspense fallback={null}>
+      <DashboardPageInner />
+    </Suspense>
   );
 }
