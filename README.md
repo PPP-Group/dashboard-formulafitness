@@ -219,10 +219,31 @@ Calling the bucket "the team" would have been a guess dressed as a measurement.
 ### Reply attribution
 
 Messages in a conversation are sorted by `dateAdded`; the last automated send
-before an inbound message earns the credit, if the gap is under 7 days. One send
-earns at most one reply. Reminders and confirmations are measured the same way
-even though a reply is not what they are asking for — the card says so rather
-than second-guessing which is which.
+**on the same channel** before an inbound message earns the credit, if the gap
+is under 7 days. One send earns at most one reply. Reminders and confirmations
+are measured the same way even though a reply is not what they are asking for —
+the card says so rather than second-guessing which is which.
+
+**The channel match is not optional.** GoHighLevel keeps SMS and email in one
+conversation, and the flows send both: a confirmation text, then a confirmation
+email one second later. Crediting "the last automated message" gave the email
+every reply that was typed into the SMS thread. Taslim Shaikh is the worked
+example — SMS confirmation at 13:35:56, email at 13:35:57, reply by SMS at
+14:01, credited to the email.
+
+Measured across 447 replies in 90 days, **10.1% of attributions move** once the
+channel has to match, and they move in one direction:
+
+| Message | Before | After |
+|---|---|---|
+| Email: Welcome | 12 | 0 |
+| Email: Confirmed Call | 13 | 0 |
+| Email: Payment Received | 4 | 0 |
+| SMS: Confirmed Call | 0 | 8 |
+| SMS: Confirmed Consultation | 0 | 4 |
+
+The confirmation emails were not earning replies at all. Every one of those
+replies was a text.
 
 ### Why it has its own fetch
 
