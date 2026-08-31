@@ -1,5 +1,4 @@
-﻿[providers]
-node = "20"
+﻿providers = ["node"]
 
 [variables]
 NIXPACKS_NODE_VERSION = "20"
