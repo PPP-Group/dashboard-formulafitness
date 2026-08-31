@@ -1,19 +1,25 @@
-import { ReactNode } from "react";
+import { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
+/**
+ * Extra props pass through to the <section>, so a card can be made clickable
+ * (role, tabIndex, onClick) without every caller re-implementing the shell.
+ */
 export function Card({
   children,
   className,
+  ...rest
 }: {
   children: ReactNode;
   className?: string;
-}) {
+} & Omit<ComponentPropsWithoutRef<"section">, "children" | "className">) {
   return (
     <section
       className={cn(
         "rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
         className,
       )}
+      {...rest}
     >
       {children}
     </section>

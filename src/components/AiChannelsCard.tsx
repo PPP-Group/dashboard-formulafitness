@@ -22,11 +22,19 @@ export function AiChannelsCard({
   loading,
   refetching,
   subtitle,
+  onSelectChannel,
 }: {
   totals: number[];
   loading: boolean;
   refetching: boolean;
   subtitle: string;
+  /**
+   * Opens the contacts who replied on that channel. Note this drills into
+   * `msg_reply`, not `ai_conversations` — the older metric counts activations
+   * and keeps no contact list, so the honest thing to show is who actually
+   * wrote in.
+   */
+  onSelectChannel?: (channel: "sms" | "call" | "email") => void;
 }) {
   const total = totals.reduce((a, b) => a + b, 0);
 
@@ -93,8 +101,37 @@ export function AiChannelsCard({
               {AI_CHANNELS.map((id, i) => {
                 const v = totals[i] ?? 0;
                 const share = total > 0 ? (v / total) * 100 : 0;
+                const channel = SERIES[id].source as "sms" | "call" | "email";
+                const clickable = Boolean(onSelectChannel);
                 return (
-                  <li key={id} className="flex items-center gap-2.5 text-sm">
+                  <li
+                    key={id}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-md text-sm",
+                      clickable &&
+                        "-mx-1.5 cursor-pointer px-1.5 py-0.5 hover:bg-raised",
+                    )}
+                    onClick={
+                      clickable ? () => onSelectChannel?.(channel) : undefined
+                    }
+                    onKeyDown={
+                      clickable
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onSelectChannel?.(channel);
+                            }
+                          }
+                        : undefined
+                    }
+                    tabIndex={clickable ? 0 : undefined}
+                    role={clickable ? "button" : undefined}
+                    aria-label={
+                      clickable
+                        ? `${SERIES[id].label}: show who replied`
+                        : undefined
+                    }
+                  >
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ background: SERIES[id].color }}

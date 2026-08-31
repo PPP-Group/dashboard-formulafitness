@@ -28,13 +28,17 @@ export function BookingRateMeter({
   loading,
   refetching,
   subtitle,
+  onSelect,
 }: {
   booked: number;
   leads: number;
   loading: boolean;
   refetching: boolean;
   subtitle: string;
+  /** Present = the card opens the leads that make up the denominator. */
+  onSelect?: () => void;
 }) {
+  const interactive = Boolean(onSelect) && !loading && leads > 0;
   const rate = leads > 0 ? (booked / leads) * 100 : null;
   const clamped = Math.min(rate ?? 0, 100);
 
@@ -43,7 +47,27 @@ export function BookingRateMeter({
   const dash = (clamped / 100) * circumference;
 
   return (
-    <Card className="flex h-full flex-col">
+    <Card
+      className={cn(
+        "flex h-full flex-col",
+        interactive &&
+          "cursor-pointer transition-colors hover:border-brand-light hover:bg-brand-soft/40",
+      )}
+      onClick={interactive ? onSelect : undefined}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect?.();
+              }
+            }
+          : undefined
+      }
+      tabIndex={interactive ? 0 : undefined}
+      role={interactive ? "button" : undefined}
+      aria-label={interactive ? "Booking rate: show the leads counted" : undefined}
+    >
       <CardHeader title="Booking rate" subtitle={subtitle} />
 
       <div

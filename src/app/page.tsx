@@ -409,6 +409,18 @@ function DashboardPageInner() {
                 loading={firstLoad}
                 refetching={refetching}
                 subtitle={periodLabel}
+                onSelectChannel={(channel) =>
+                  setDrill({
+                    // ai_conversations counts activations and keeps no contact
+                    // list, so the drill-down shows who actually wrote in.
+                    metricKey: "msg_reply",
+                    label: `Replied over ${channel === "call" ? "voice" : channel}`,
+                    from: view.from,
+                    to: view.to,
+                    source: channel,
+                    periodLabel,
+                  })
+                }
               />
             </section>
           </div>
@@ -450,6 +462,18 @@ function DashboardPageInner() {
               loading={journeyFirstLoad}
               refetching={journeyRefetching}
               subtitle={filterNote ? `${periodLabel} · ${filterNote}` : periodLabel}
+              onSelect={() =>
+                setDrill({
+                  // The denominator: the leads created in this window. Which of
+                  // them booked is the question the card is asking.
+                  metricKey: "form_submissions_total",
+                  label: "Leads created in this period",
+                  from: view.from,
+                  to: view.to,
+                  source: leadSource,
+                  periodLabel,
+                })
+              }
             />
             <div className="lg:col-span-2">
               <WeekdayCard
