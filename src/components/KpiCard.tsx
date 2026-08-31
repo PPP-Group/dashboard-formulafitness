@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Minus, Users } from "lucide-react";
 import { viz } from "@/lib/brand";
 import { cn, formatCount, formatSignedPct } from "@/lib/cn";
 import { SERIES, SeriesId } from "@/lib/metrics";
@@ -72,17 +72,41 @@ export function KpiCard({
   deltaPct,
   spark,
   loading,
+  onSelect,
 }: {
   seriesId: SeriesId;
   value: number;
   deltaPct: number | null;
   spark: number[];
   loading: boolean;
+  /** Present = the tile opens the contacts behind the number. */
+  onSelect?: () => void;
 }) {
   const def = SERIES[seriesId];
+  const interactive = Boolean(onSelect) && !loading;
 
   return (
-    <article className="rounded-2xl border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(17,24,39,0.04)]">
+    <article
+      className={cn(
+        "rounded-2xl border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(17,24,39,0.04)]",
+        interactive &&
+          "cursor-pointer transition-colors hover:border-brand-light hover:bg-brand-soft/40",
+      )}
+      onClick={interactive ? onSelect : undefined}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect?.();
+              }
+            }
+          : undefined
+      }
+      tabIndex={interactive ? 0 : undefined}
+      role={interactive ? "button" : undefined}
+      aria-label={interactive ? `${def.label}: show contacts` : undefined}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span
@@ -94,6 +118,13 @@ export function KpiCard({
             {def.label}
           </h3>
         </div>
+        {interactive ? (
+          <Users
+            size={14}
+            className="mt-0.5 shrink-0 text-ink-faint"
+            aria-hidden="true"
+          />
+        ) : null}
       </div>
 
       {loading ? (

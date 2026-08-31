@@ -25,19 +25,30 @@ import {
   CHART_SERIES,
   KPI_SERIES,
   LEAD_SOURCES,
+  SERIES,
   SourceSelection,
   TABLE_SERIES,
+  effectiveSource,
   humanizeSource,
   mergeSources,
 } from "@/lib/metrics";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { cohortBookingRate } from "@/lib/journey";
+import {
+  buildEngagementSummary,
+  buildStepPerformance,
+  StepPerformance,
+} from "@/lib/engagement";
+import { useEngagement } from "@/hooks/useEngagement";
 import { useLeadJourney } from "@/hooks/useLeadJourney";
 import { useMetrics } from "@/hooks/useMetrics";
 import { AiChannelsCard } from "@/components/AiChannelsCard";
 import { BookingRateMeter } from "@/components/BookingRateMeter";
 import { BreakdownTable } from "@/components/BreakdownTable";
+import { ContactDrawer, DrillTarget } from "@/components/ContactDrawer";
+import { EngagementSummaryCard } from "@/components/EngagementSummaryCard";
 import { KpiCard } from "@/components/KpiCard";
+import { MessagePerformanceCard } from "@/components/MessagePerformanceCard";
 import { LeadSourceCard } from "@/components/LeadSourceCard";
 import { Topbar } from "@/components/Topbar";
 import { TrendChart } from "@/components/TrendChart";
@@ -65,6 +76,16 @@ function DashboardPageInner() {
     error: journeyError,
     refresh: refreshJourney,
   } = useLeadJourney();
+  // Engagement rides its own fetch: one row per message per day is far denser
+  // than the pipeline counts, and it only spans the last 100 days.
+  const {
+    rows: engagementRows,
+    loading: engagementLoading,
+    refresh: refreshEngagement,
+  } = useEngagement();
+
+  // Which number the contacts popup is currently open for.
+  const [drill, setDrill] = useState<DrillTarget | null>(null);
 
   const today = todayInGymTz();
   const minDate = addDays(today, -(RETENTION_DAYS - 1));
@@ -101,6 +122,8 @@ function DashboardPageInner() {
   const journeyFirstLoad =
     journeyLoading && journeyRows.length === 0 && !journeyError;
   const journeyRefetching = journeyLoading && journeyRows.length > 0;
+  const engagementFirstLoad = engagementLoading && engagementRows.length === 0;
+  const engagementRefetching = engagementLoading && engagementRows.length > 0;
 
   const view = useMemo(() => {
     // The selected bucket is what every headline number reports on.
@@ -222,8 +245,29 @@ function DashboardPageInner() {
       // lead_journey carries `source` per opportunity — one the origin filter
       // can actually reach.
       bookingRate: cohortBookingRate(journeyRows, from, to, leadSource),
+      // Per-message engagement. Unfiltered by lead origin: `step_sent` and
+      // `step_reply` are keyed by which message went out, not where the lead
+      // came from, so the origin filter has nothing to match on here.
+      //
+      // Both read the trend window, not the selected bucket — same reasoning as
+      // the weekday card. A reply rate needs a span of sends behind it, and one
+      // day of a sequence that paces itself over 32 days is a handful of
+      // messages and no signal. Putting the summary on a different window than
+      // the table beside it would also show two unrelated timeframes as if they
+      // were one story.
+      engagement: buildEngagementSummary(engagementRows, windowStart, to),
+      steps: buildStepPerformance(engagementRows, windowStart, to),
     };
-  }, [rows, journeyRows, anchor, granularity, leadSource, today, minDate]);
+  }, [
+    rows,
+    journeyRows,
+    engagementRows,
+    anchor,
+    granularity,
+    leadSource,
+    today,
+    minDate,
+  ]);
 
   const periodLabel = formatBucketLabel(anchor, granularity);
   const filterNote = leadSource
@@ -265,6 +309,7 @@ function DashboardPageInner() {
           onRefresh={() => {
             refresh();
             refreshJourney();
+            refreshEngagement();
           }}
           onExport={handleExport}
         />
@@ -292,6 +337,7 @@ function DashboardPageInner() {
                   onClick={() => {
                     refresh();
                     refreshJourney();
+                    refreshEngagement();
                   }}
                   className="mt-2 text-sm font-medium text-brand-dark underline underline-offset-2"
                 >
@@ -304,16 +350,31 @@ function DashboardPageInner() {
           <section id="overview" className="scroll-mt-32">
             <h2 className="sr-only">Overview</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {view.kpis.map((k) => (
-                <KpiCard
-                  key={k.id}
-                  seriesId={k.id}
-                  value={k.value}
-                  deltaPct={k.delta}
-                  spark={k.spark}
-                  loading={firstLoad}
-                />
-              ))}
+              {view.kpis.map((k) => {
+                const def = SERIES[k.id];
+                return (
+                  <KpiCard
+                    key={k.id}
+                    seriesId={k.id}
+                    value={k.value}
+                    deltaPct={k.delta}
+                    spark={k.spark}
+                    loading={firstLoad}
+                    onSelect={() =>
+                      setDrill({
+                        metricKey: def.metricKey,
+                        label: def.label,
+                        from: view.from,
+                        to: view.to,
+                        source: effectiveSource(def, {
+                          leads_created: leadSource,
+                        }),
+                        periodLabel,
+                      })
+                    }
+                  />
+                );
+              })}
             </div>
           </section>
 
@@ -352,6 +413,36 @@ function DashboardPageInner() {
             </section>
           </div>
 
+          <section id="messages" className="scroll-mt-32">
+            <h2 className="sr-only">Message performance</h2>
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              <EngagementSummaryCard
+                summary={view.engagement}
+                loading={engagementFirstLoad}
+                refetching={engagementRefetching}
+                subtitle={trendLabel}
+              />
+              <div className="lg:col-span-2">
+                <MessagePerformanceCard
+                  steps={view.steps}
+                  loading={engagementFirstLoad}
+                  refetching={engagementRefetching}
+                  subtitle={trendLabel}
+                  onSelect={(step: StepPerformance) =>
+                    setDrill({
+                      metricKey: "step_reply",
+                      label: `Replied to ${step.label}`,
+                      from: view.windowStart,
+                      to: view.to,
+                      source: step.id,
+                      periodLabel: trendLabel,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </section>
+
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             <BookingRateMeter
               booked={view.bookingRate.booked}
@@ -384,6 +475,8 @@ function DashboardPageInner() {
           </section>
         </main>
       </div>
+
+      <ContactDrawer target={drill} onClose={() => setDrill(null)} />
     </div>
   );
 }

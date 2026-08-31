@@ -2,34 +2,37 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SUBACCOUNT, supabase } from "@/lib/supabase";
-import { CORE_METRIC_KEYS, MetricRow } from "@/lib/metrics";
+import { MetricRow } from "@/lib/metrics";
+import { ENGAGEMENT_KEYS } from "@/lib/engagement";
 import { addDays, todayInGymTz } from "@/lib/dates";
 
-/** n8n writes hourly; a 60s poll is plenty to feel live. */
 const POLL_MS = 60_000;
 const PAGE_SIZE = 1000;
 
 /**
- * Upper bound on history we pull. Retention is meant to be 90 days, but the
- * cleanup workflow isn't built yet — this keeps the payload bounded either way.
+ * Engagement rows are far denser than the pipeline metrics — one row per
+ * message per day, not one per stage — so they are fetched on their own
+ * shorter window instead of riding along with `useMetrics`' 400-day pull.
+ * 90 days matches the retention the rest of the dashboard assumes.
  */
-const LOOKBACK_DAYS = 400;
+const LOOKBACK_DAYS = 100;
 
-export type MetricsState = {
+export type EngagementState = {
   rows: MetricRow[];
   loading: boolean;
+  /**
+   * Null while the feature is simply not producing data yet. The engagement
+   * workflow ships after the dashboard, so an empty table is the expected
+   * first state, not a failure worth shouting about.
+   */
   error: string | null;
-  lastUpdated: Date | null;
   refresh: () => void;
 };
 
-export function useMetrics(): MetricsState {
+export function useEngagement(): EngagementState {
   const [rows, setRows] = useState<MetricRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  // Cached so the polling refetch skips the subaccount lookup.
   const subaccountId = useRef<string | null>(null);
 
   const load = useCallback(async () => {
@@ -49,13 +52,12 @@ export function useMetrics(): MetricsState {
       const since = addDays(todayInGymTz(), -LOOKBACK_DAYS);
       const all: MetricRow[] = [];
 
-      // Supabase caps a single response at 1000 rows, so page until exhausted.
       for (let page = 0; ; page++) {
         const { data, error: rowErr } = await supabase
           .from("metrics_daily")
           .select("metric_key, metric_date, count, source")
           .eq("subaccount_id", subaccountId.current)
-          .in("metric_key", CORE_METRIC_KEYS as unknown as string[])
+          .in("metric_key", ENGAGEMENT_KEYS as unknown as string[])
           .gte("metric_date", since)
           .order("metric_date", { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -68,10 +70,9 @@ export function useMetrics(): MetricsState {
       }
 
       setRows(all);
-      setLastUpdated(new Date());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load metrics.");
+      setError(e instanceof Error ? e.message : "Failed to load engagement.");
     } finally {
       setLoading(false);
     }
@@ -85,8 +86,6 @@ export function useMetrics(): MetricsState {
 
     tick();
     const id = setInterval(tick, POLL_MS);
-
-    // Catch up immediately when the tab comes back into focus.
     const onVisible = () => {
       if (document.visibilityState === "visible") tick();
     };
@@ -104,5 +103,5 @@ export function useMetrics(): MetricsState {
     void load();
   }, [load]);
 
-  return { rows, loading, error, lastUpdated, refresh };
+  return { rows, loading, error, refresh };
 }
