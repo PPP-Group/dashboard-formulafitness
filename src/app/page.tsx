@@ -249,14 +249,16 @@ function DashboardPageInner() {
       // `step_reply` are keyed by which message went out, not where the lead
       // came from, so the origin filter has nothing to match on here.
       //
-      // Both read the trend window, not the selected bucket — same reasoning as
-      // the weekday card. A reply rate needs a span of sends behind it, and one
-      // day of a sequence that paces itself over 32 days is a handful of
-      // messages and no signal. Putting the summary on a different window than
-      // the table beside it would also show two unrelated timeframes as if they
-      // were one story.
-      engagement: buildEngagementSummary(engagementRows, windowStart, to),
-      steps: buildStepPerformance(engagementRows, windowStart, to),
+      // Both read the SELECTED period, like every other headline number on the
+      // page. Filtering to a day and being shown a 30-day total is the card
+      // answering a question nobody asked.
+      //
+      // The trend chart, the weekday card and the breakdown table do span the
+      // window, because a line needs more than one point, a weekday
+      // distribution needs several weekdays, and the table is one row per
+      // bucket. A total is not one of those.
+      engagement: buildEngagementSummary(engagementRows, from, to),
+      steps: buildStepPerformance(engagementRows, from, to),
     };
   }, [
     rows,
@@ -432,22 +434,22 @@ function DashboardPageInner() {
                 summary={view.engagement}
                 loading={engagementFirstLoad}
                 refetching={engagementRefetching}
-                subtitle={trendLabel}
+                subtitle={periodLabel}
               />
               <div className="lg:col-span-2">
                 <MessagePerformanceCard
                   steps={view.steps}
                   loading={engagementFirstLoad}
                   refetching={engagementRefetching}
-                  subtitle={trendLabel}
+                  subtitle={periodLabel}
                   onSelect={(step: StepPerformance) =>
                     setDrill({
                       metricKey: "step_reply",
                       label: `Replied to ${step.label}`,
-                      from: view.windowStart,
+                      from: view.from,
                       to: view.to,
                       source: step.id,
-                      periodLabel: trendLabel,
+                      periodLabel,
                     })
                   }
                 />

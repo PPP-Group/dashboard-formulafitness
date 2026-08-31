@@ -53,14 +53,16 @@ export function humanizeFingerprint(id: string): string {
 /**
  * Per-message send and reply totals for a window.
  *
- * `minSends` guards against a message sent twice with one reply reading as a
- * 50% performer next to one sent 200 times.
+ * `minSends` defaults to 1: on a single-day view almost nothing clears a
+ * higher bar, and hiding the day's actual sends to avoid a flattering-looking
+ * small sample is the wrong trade. The table sorts by volume, not by rate, so
+ * a message sent twice never sits above one sent two hundred times.
  */
 export function buildStepPerformance(
   rows: MetricRow[],
   from: string,
   to: string,
-  minSends = 3,
+  minSends = 1,
 ): StepPerformance[] {
   const sent = new Map<string, number>();
   const replied = new Map<string, number>();
