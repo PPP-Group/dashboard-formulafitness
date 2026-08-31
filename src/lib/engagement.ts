@@ -1,3 +1,4 @@
+import { MESSAGE_NAMES } from "./messageNames";
 import { MetricRow } from "./metrics";
 import { inRange } from "./aggregate";
 
@@ -41,13 +42,24 @@ export type StepPerformance = {
 };
 
 /**
- * A fingerprint is lowercase words joined by underscores. Rendering it as a
- * phrase is closer to the message than a title-cased label would be, and the
- * ellipses are honest about it being an extract, not the whole text.
+ * The snippet name where we have one, because that is what a person can
+ * actually look up in GoHighLevel.
+ *
+ * Retired copy has no snippet any more, so it falls back to the fingerprint
+ * rendered as a phrase. The ellipses mark it as an extract of the body rather
+ * than a name — a row that reads this way is telling you the message is not in
+ * the library.
  */
 export function humanizeFingerprint(id: string): string {
   if (!id || id === "unknown") return "Unrecognised message";
+  const known = MESSAGE_NAMES[id];
+  if (known) return known;
   return `…${id.split("_").join(" ")}…`;
+}
+
+/** True when the label is a real snippet name rather than a body extract. */
+export function isNamedMessage(id: string): boolean {
+  return Boolean(MESSAGE_NAMES[id]);
 }
 
 /**
