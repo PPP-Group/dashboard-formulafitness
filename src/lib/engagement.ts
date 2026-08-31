@@ -9,8 +9,8 @@ import { inRange } from "./aggregate";
  * |-------------------|-----------------|--------------------------------------|
  * | `step_sent`       | message id      | sends of one specific message        |
  * | `step_reply`      | message id      | replies credited to that message     |
- * | `msg_sent_auto`   | `sms` / `email` | sent by a workflow                   |
- * | `msg_sent_manual` | `sms` / `email` | typed by a person in GHL             |
+ * | `msg_sent_auto`   | `sms` / `email` | sent by a workflow action            |
+ * | `msg_sent_inbox`  | `sms` / `email` | sent from the conversation view      |
  * | `msg_reply`       | `sms` / `email` | inbound from the contact             |
  * | `msg_failed`      | `sms` / `email` | carrier rejected or never delivered  |
  * | `optout_dnd`      | `customer`      | contact switched DND on              |
@@ -23,7 +23,7 @@ export const ENGAGEMENT_KEYS = [
   "step_sent",
   "step_reply",
   "msg_sent_auto",
-  "msg_sent_manual",
+  "msg_sent_inbox",
   "msg_reply",
   "msg_failed",
   "optout_dnd",
@@ -112,7 +112,13 @@ export function sumEngagement(
 
 export type EngagementSummary = {
   automated: number;
-  manual: number;
+  /**
+   * Sent from the conversation view rather than by a workflow action. GHL tags
+   * these `source: "app"`, which covers BOTH the Conversation AI replying and a
+   * person typing — the API exposes no field that separates the two, so this
+   * is deliberately not called "manual".
+   */
+  inbox: number;
   replies: number;
   failed: number;
   optOuts: number;
@@ -126,14 +132,14 @@ export function buildEngagementSummary(
   to: string,
 ): EngagementSummary {
   const automated = sumEngagement(rows, "msg_sent_auto", from, to);
-  const manual = sumEngagement(rows, "msg_sent_manual", from, to);
+  const inbox = sumEngagement(rows, "msg_sent_inbox", from, to);
   const replies = sumEngagement(rows, "msg_reply", from, to);
   const failed = sumEngagement(rows, "msg_failed", from, to);
   const optOuts = sumEngagement(rows, "optout_dnd", from, to);
 
   return {
     automated,
-    manual,
+    inbox,
     replies,
     failed,
     optOuts,

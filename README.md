@@ -201,12 +201,20 @@ in conversations whose contact name ends in "Staff" and are dropped, otherwise
 they are ~40% of automated SMS volume and every one carries a different lead's
 name, so each fingerprints separately.
 
-**`source: 'app'` messages.** `direction: outbound` alone does not mean
-automation — GHL tags each message with `source`, where `workflow` is an
-automation and `app` is a person typing. `msg_sent_auto` and `msg_sent_manual`
-keep them apart. This is also the flaw in the older `ai_conversations` metric,
-which counts both: on a 100-conversation sample there are 522 `app` messages
-against 225 `workflow` ones.
+**Nothing, on the `app` side — and that is the point.** GHL tags each outbound
+message with a `source`: `workflow` for a workflow action, `app` for anything
+sent from the conversation view. `msg_sent_auto` and `msg_sent_inbox` keep those
+apart, which `ai_conversations` does not.
+
+`msg_sent_inbox` is deliberately **not** called "manual". Measured over the last
+100 customer conversations, outbound SMS and email split 438 `workflow` to 133
+`app` — and of the `app` messages that follow an inbound one, **84% answer
+within 30 seconds and 92% within two minutes**, with bodies like "Looks like
+nothing is open earlier on Monday, but I do have alternate slots on Tuesday".
+That is the Conversation AI, not a person. The messages API carries no
+`subType`, no `meta`, and a `userId` that is the contact's assigned owner on
+both kinds of send, so there is no field that separates the AI from a human.
+Calling the bucket "the team" would have been a guess dressed as a measurement.
 
 ### Reply attribution
 

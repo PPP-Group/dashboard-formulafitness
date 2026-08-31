@@ -7,12 +7,15 @@ import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
 
 /**
- * Outbound volume split by who actually sent it.
+ * Outbound volume split by how it was sent.
  *
- * `ai_conversations` counts every message in an active thread, which mixes the
- * automation with whatever the team typed by hand. This card keeps the two
- * apart, because "the sequences sent 285 texts" and "the team sent 138" are
- * different facts with different consequences.
+ * A workflow action and a message sent from the conversation view are different
+ * facts with different consequences, and `ai_conversations` counts them as one.
+ *
+ * The second bucket is NOT "sent by a person": GHL tags both the Conversation
+ * AI and a human typing as `source: "app"`, and exposes no field that tells
+ * them apart. Measured against live history, the overwhelming majority of it
+ * answers the contact within 30 seconds, which is the AI, not the team.
  */
 export function EngagementSummaryCard({
   summary,
@@ -25,7 +28,7 @@ export function EngagementSummaryCard({
   refetching: boolean;
   subtitle: string;
 }) {
-  const outbound = summary.automated + summary.manual;
+  const outbound = summary.automated + summary.inbox;
   const autoShare = outbound > 0 ? (summary.automated / outbound) * 100 : 0;
 
   return (
@@ -57,7 +60,7 @@ export function EngagementSummaryCard({
                 className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full"
                 style={{ background: viz.track }}
                 role="img"
-                aria-label={`Automated ${summary.automated}, manual ${summary.manual}`}
+                aria-label={`Workflow ${summary.automated}, inbox ${summary.inbox}`}
               >
                 {outbound > 0 ? (
                   <>
@@ -80,17 +83,26 @@ export function EngagementSummaryCard({
               </div>
             </div>
 
-            <ul className="mt-5 space-y-2.5">
+            {/*
+              The two rows with a dot are the two segments of the bar above —
+              the dot is that bar's legend. The three below are not in the bar,
+              so they sit under a rule rather than borrowing a colour that
+              would not mean anything.
+            */}
+            <ul className="mt-4 space-y-2.5">
               <Row
                 color={SERIES_SLOTS[0]}
-                label="Sent by automation"
+                label="Sent by a workflow"
                 value={summary.automated}
               />
               <Row
                 color={viz.recessive}
-                label="Sent by the team"
-                value={summary.manual}
+                label="Sent from the inbox"
+                value={summary.inbox}
               />
+            </ul>
+
+            <ul className="mt-3 space-y-2.5 border-t border-line pt-3">
               <Row label="Replies received" value={summary.replies} />
               <Row
                 label="Failed to deliver"
@@ -103,6 +115,11 @@ export function EngagementSummaryCard({
                 tone={summary.optOuts > 0 ? viz.down : undefined}
               />
             </ul>
+
+            <p className="mt-3 text-[11px] text-ink-faint">
+              “From the inbox” is the Conversation AI plus anyone on the team —
+              GoHighLevel does not distinguish them.
+            </p>
           </>
         )}
       </div>
