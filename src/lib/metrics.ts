@@ -123,6 +123,22 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
   },
 };
 
+/**
+ * The metric_keys the cards on this page are built from.
+ *
+ * `metrics_daily` is a shared table and the collection workflows keep adding
+ * keys to it (per-message engagement is one row per message per day, an order
+ * of magnitude denser than these). The main fetch names what it needs so a new
+ * key can never silently inflate this page's payload.
+ */
+export const CORE_METRIC_KEYS = [
+  "form_submissions_total",
+  "game_plan_call_booked",
+  "consultation_booked",
+  "consultation_won",
+  "ai_conversations",
+] as const;
+
 export type SourceOption = { value: string; label: string };
 
 /**

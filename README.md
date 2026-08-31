@@ -163,6 +163,102 @@ today's rate; it counts toward next week's. Because `lead_journey` carries
 `source` per row, this is also the one card the lead-origin filter can scope
 correctly end to end.
 
+## Message engagement (v2)
+
+Tony's question is not "did the sequence work" but **"which message worked"**.
+A workflow-level reply rate cannot answer that, so a second family of metrics
+lands in the same `metrics_daily` table, using `source` as the breakdown
+dimension. No new table, no migration.
+
+| `metric_key` | `source` | Meaning |
+|---|---|---|
+| `step_sent` | message fingerprint | sends of one specific message |
+| `step_reply` | message fingerprint | replies credited to that message |
+| `msg_sent_auto` | `sms` / `email` | sent by a workflow |
+| `msg_sent_manual` | `sms` / `email` | typed by a person in GHL |
+| `msg_reply` | `sms` / `email` | inbound from the contact |
+| `msg_failed` | `sms` / `email` | carrier rejected or never delivered |
+| `optout_dnd` | `customer` | contact switched DND on |
+
+### The fingerprint
+
+GHL exposes no template id on a sent message, and email messages carry no
+subject in the messages payload — so the message body is the only thing that
+identifies which step went out. The fingerprint lowercases it, strips HTML,
+links, digits, the staff roster and **the contact's own name**, then keeps the
+first six remaining words. Two sends of the same template therefore collapse to
+one id no matter who they went to or which coach signed them.
+
+Measured against 90 days of live history this takes 258 raw variants down to 39
+distinct messages. Without stripping the contact's name it fragments into 348 and
+the table is unreadable.
+
+### What it deliberately excludes
+
+**Internal notifications.** The 🔔 NEW LEAD / ⚠️ LEAD NOT RESPONDING / 📞 New
+15-min discovery call texts are workflow sends to staff, not to leads. They live
+in conversations whose contact name ends in "Staff" and are dropped, otherwise
+they are ~40% of automated SMS volume and every one carries a different lead's
+name, so each fingerprints separately.
+
+**`source: 'app'` messages.** `direction: outbound` alone does not mean
+automation — GHL tags each message with `source`, where `workflow` is an
+automation and `app` is a person typing. `msg_sent_auto` and `msg_sent_manual`
+keep them apart. This is also the flaw in the older `ai_conversations` metric,
+which counts both: on a 100-conversation sample there are 522 `app` messages
+against 225 `workflow` ones.
+
+### Reply attribution
+
+Messages in a conversation are sorted by `dateAdded`; the last automated send
+before an inbound message earns the credit, if the gap is under 7 days. One send
+earns at most one reply. Reminders and confirmations are measured the same way
+even though a reply is not what they are asking for — the card says so rather
+than second-guessing which is which.
+
+### Why it has its own fetch
+
+`useEngagement` pulls these keys on a 100-day window instead of riding along
+with `useMetrics`. One row per message per day is an order of magnitude denser
+than the pipeline counts, and mixing them would multiply the main payload.
+`useMetrics` now names the keys it wants (`CORE_METRIC_KEYS`), so a new
+collection metric can never silently inflate the rest of the page.
+
+### Windows
+
+The engagement summary and the per-message table both read the **trend window**,
+not the selected bucket — same reasoning as the weekday card. A reply rate needs
+a span of sends behind it, and one day of a sequence that paces itself over 32
+days is a handful of messages and no signal.
+
+## `metric_contacts` — the drill-down
+
+Clicking a KPI tile or a message row opens the contacts behind that number, and
+each row links straight into GoHighLevel. Counts cannot answer "who", so this is
+the one addition that needs a table:
+
+`public.metric_contacts` — one row per (metric, day, source, contact), with
+`contact_name`, a short `detail` string, and `occurred_at`. Same RLS as the
+rest: public `SELECT`, writes only via `service_role`. The migration lives with
+the collection workflows, not in this repo.
+
+The dashboard **degrades gracefully when the table does not exist**: Postgres
+returns `42P01`, `useMetricContacts` reads that code specifically and the popup
+says the detail is not switched on yet rather than throwing an error over a
+dashboard whose numbers are all still correct.
+
+`useMetricContacts` takes primitives rather than a query object — an object gets
+a new identity on every parent render and would refetch forever — and tags each
+request with a token so a slow response for a metric the user already navigated
+away from is discarded instead of rendered under the wrong heading.
+
+### GHL deep links
+
+`src/lib/ghl.ts`. The location id is not a secret (it is in the address bar of
+every GHL page the team has open) but it is configurable via
+`NEXT_PUBLIC_GHL_LOCATION_ID` / `NEXT_PUBLIC_GHL_APP_ORIGIN` so this repo is not
+pinned to one subaccount.
+
 ## Chart colors
 
 The palette is derived from the official Formula Fitness site and **validated**,
