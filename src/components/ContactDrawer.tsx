@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ArrowUpRight, X } from "lucide-react";
-import { useMetricContacts } from "@/hooks/useMetricContacts";
+import { ContactRow, useMetricContacts } from "@/hooks/useMetricContacts";
 import { ghlContactUrl } from "@/lib/ghl";
 import { formatLong } from "@/lib/dates";
 import { Skeleton } from "./ui/Skeleton";
@@ -35,12 +35,44 @@ export function ContactDrawer({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  const { rows, loading, error, unavailable } = useMetricContacts(
+  const { rows: rawRows, loading, error, unavailable } = useMetricContacts(
     target?.metricKey ?? null,
     target?.from ?? "",
     target?.to ?? "",
     target?.source ?? null,
   );
+
+  /**
+   * One row per person, not per row in the table.
+   *
+   * metric_contacts keys a row on (metric, day, source, contact), which is what
+   * keeps it lined up with the daily counts. A contact who replied on two days,
+   * or over both SMS and voice, therefore has several rows and was being listed
+   * several times. The drawer answers "who", and a person is one person: rows
+   * are folded by contact, newest first, with a count when there is more than
+   * one occurrence behind the name.
+   */
+  const rows = useMemo(() => {
+    const byContact = new Map<
+      string,
+      { row: ContactRow; times: number }
+    >();
+    for (const r of rawRows) {
+      const seen = byContact.get(r.ghl_contact_id);
+      if (!seen) {
+        byContact.set(r.ghl_contact_id, { row: r, times: 1 });
+        continue;
+      }
+      seen.times += 1;
+      // Keep the most recent occurrence as the one on show.
+      if (r.metric_date > seen.row.metric_date) seen.row = r;
+    }
+    return [...byContact.values()].sort(
+      (a, b) =>
+        (a.row.metric_date < b.row.metric_date ? 1 : -1) ||
+        (a.row.contact_name ?? "").localeCompare(b.row.contact_name ?? ""),
+    );
+  }, [rawRows]);
 
   // Escape closes, and the close button takes focus so keyboard users land
   // somewhere useful instead of at the top of the page behind the overlay.
@@ -126,8 +158,8 @@ export function ContactDrawer({
             </p>
           ) : (
             <ul className="divide-y divide-line">
-              {rows.map((r) => (
-                <li key={`${r.ghl_contact_id}-${r.metric_date}-${r.source}`}>
+              {rows.map(({ row: r, times }) => (
+                <li key={r.ghl_contact_id}>
                   <a
                     href={ghlContactUrl(r.ghl_contact_id)}
                     target="_blank"
@@ -135,8 +167,15 @@ export function ContactDrawer({
                     className="flex items-start justify-between gap-3 px-5 py-3 hover:bg-raised"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-ink">
-                        {r.contact_name?.trim() || "Unnamed contact"}
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-ink">
+                          {r.contact_name?.trim() || "Unnamed contact"}
+                        </span>
+                        {times > 1 ? (
+                          <span className="nums shrink-0 rounded-full bg-raised px-1.5 py-0.5 text-[10px] font-medium text-ink-soft">
+                            ×{times}
+                          </span>
+                        ) : null}
                       </span>
                       {r.detail ? (
                         <span className="mt-0.5 block truncate text-xs text-ink-soft">
