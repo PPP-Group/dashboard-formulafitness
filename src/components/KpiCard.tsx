@@ -5,6 +5,7 @@ import { viz } from "@/lib/brand";
 import { cn, formatCount, formatSignedPct } from "@/lib/cn";
 import { SERIES, SeriesId } from "@/lib/metrics";
 import { Skeleton } from "./ui/Skeleton";
+import { InfoTip, TipRow } from "./ui/InfoTip";
 
 function Sparkline({ values, color }: { values: number[]; color: string }) {
   const w = 96;
@@ -114,8 +115,16 @@ export function KpiCard({
             style={{ background: def.color }}
             aria-hidden="true"
           />
-          <h3 className="truncate text-sm font-medium text-ink-soft" title={def.hint}>
-            {def.label}
+          <h3 className="flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+            <span className="truncate">{def.label}</span>
+            {/* Stops the click from also opening the contact drawer behind it. */}
+            <span onClick={(e) => e.stopPropagation()}>
+              <InfoTip title={def.label}>
+                <TipRow label="What it is">{def.tip.what}</TipRow>
+                <TipRow label="How it is worked out">{def.tip.how}</TipRow>
+                <TipRow label="Filters">{def.tip.filters}</TipRow>
+              </InfoTip>
+            </span>
           </h3>
         </div>
         {interactive ? (

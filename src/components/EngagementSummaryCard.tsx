@@ -5,6 +5,7 @@ import { cn, formatCount, formatPct } from "@/lib/cn";
 import { EngagementSummary } from "@/lib/engagement";
 import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
+import { InfoTip, TipRow } from "./ui/InfoTip";
 
 /**
  * Outbound volume split by how it was sent.
@@ -33,7 +34,29 @@ export function EngagementSummaryCard({
 
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader title="Outbound and replies" subtitle={subtitle} />
+      <CardHeader
+        title="Outbound and replies"
+        subtitle={subtitle}
+        info={
+          <InfoTip title="Outbound and replies" align="right">
+              <TipRow label="What it is">
+                Everything that went out to contacts over SMS and email in the period, and what came back.
+              </TipRow>
+              <TipRow label="How it is worked out">
+                &ldquo;Sent by a workflow&rdquo; is an automation step firing.
+                &ldquo;Sent from the inbox&rdquo; is a message sent from the
+                conversation view, which covers the conversation AI and anyone
+                on the team; GoHighLevel does not separate the two.
+              </TipRow>
+              <TipRow label="Read it carefully">
+                Replies are inbound messages from contacts. Failed means the carrier rejected it or never delivered it. Opted out means the contact switched do-not-disturb on.
+              </TipRow>
+              <TipRow label="Filters">
+                The period picker chooses which days are counted. The origin filter does not apply here.
+              </TipRow>
+          </InfoTip>
+        }
+      />
 
       <div className={cn("px-5 pt-1 pb-5", refetching && "refetching")}>
         {loading ? (

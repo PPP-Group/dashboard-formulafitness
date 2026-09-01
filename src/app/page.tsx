@@ -40,7 +40,7 @@ import {
   StepPerformance,
 } from "@/lib/engagement";
 import { useEngagement } from "@/hooks/useEngagement";
-import { useLeadJourney } from "@/hooks/useLeadJourney";
+import { useBookingCohort } from "@/hooks/useBookingCohort";
 import { useMetrics } from "@/hooks/useMetrics";
 import { AiChannelsCard } from "@/components/AiChannelsCard";
 import { BookingRateMeter } from "@/components/BookingRateMeter";
@@ -75,7 +75,7 @@ function DashboardPageInner() {
     loading: journeyLoading,
     error: journeyError,
     refresh: refreshJourney,
-  } = useLeadJourney();
+  } = useBookingCohort();
   // Engagement rides its own fetch: one row per message per day is far denser
   // than the pipeline counts, and it only spans the last 100 days.
   const {
@@ -117,7 +117,7 @@ function DashboardPageInner() {
   // First load shows skeletons; later polls hold the previous render instead.
   const firstLoad = loading && rows.length === 0 && !error;
   const refetching = loading && rows.length > 0;
-  // lead_journey loads on its own schedule — a fresh table starts empty and
+  // The cohort loads on its own schedule — a fresh table starts empty and
   // fills in as the sync workflow runs, independent of metrics_daily.
   const journeyFirstLoad =
     journeyLoading && journeyRows.length === 0 && !journeyError;
@@ -240,9 +240,9 @@ function DashboardPageInner() {
       ),
       // Cross-metric comparisons: unfiltered on both sides, always.
       ai: AI_CHANNELS.map((id) => sumInRange(rows, id, from, to)),
-      // From lead_journey, not metrics_daily: a genuine cohort rate (booked
+      // From metric_contacts, not the daily counts: a genuine cohort rate (booked
       // within the SAME window the lead was created), and — since
-      // lead_journey carries `source` per opportunity — one the origin filter
+      // the contact rows carry `source` per contact — one the origin filter
       // can actually reach.
       bookingRate: cohortBookingRate(journeyRows, from, to, leadSource),
       // Per-message engagement. Unfiltered by lead origin: `step_sent` and

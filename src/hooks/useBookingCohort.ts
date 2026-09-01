@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SUBACCOUNT, supabase } from "@/lib/supabase";
-import { JourneyRow } from "@/lib/journey";
+import { BookingCohortRow, COHORT_KEYS } from "@/lib/journey";
 import { addDays, todayInGymTz } from "@/lib/dates";
 
 /** The n8n sync runs hourly; a 60s poll is plenty to feel live. */
@@ -12,19 +12,22 @@ const PAGE_SIZE = 1000;
 /** Upper bound on history pulled — matches useMetrics' lookback window. */
 const LOOKBACK_DAYS = 400;
 
-export type LeadJourneyState = {
-  rows: JourneyRow[];
+export type BookingCohortState = {
+  rows: BookingCohortRow[];
   loading: boolean;
   error: string | null;
   refresh: () => void;
 };
 
 /**
- * Reads public.lead_journey — a separate table from metrics_daily, so a
- * separate small fetch loop rather than folding into useMetrics.
+ * Reads the contact rows behind the two metrics the booking cohort needs.
+ *
+ * A separate small fetch loop rather than folding into useMetrics: this is
+ * contact-level data, an order of magnitude denser than the daily counts, and
+ * only two metric keys of it are wanted.
  */
-export function useLeadJourney(): LeadJourneyState {
-  const [rows, setRows] = useState<JourneyRow[]>([]);
+export function useBookingCohort(): BookingCohortState {
+  const [rows, setRows] = useState<BookingCohortRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,28 +48,29 @@ export function useLeadJourney(): LeadJourneyState {
       }
 
       const since = addDays(todayInGymTz(), -LOOKBACK_DAYS);
-      const all: JourneyRow[] = [];
+      const all: BookingCohortRow[] = [];
 
       for (let page = 0; ; page++) {
         const { data, error: rowErr } = await supabase
-          .from("lead_journey")
-          .select("source, created_date, game_plan_booked_date")
+          .from("metric_contacts")
+          .select("metric_key, source, metric_date, ghl_contact_id")
           .eq("subaccount_id", subaccountId.current)
-          .gte("created_date", since)
-          .order("created_date", { ascending: true })
+          .in("metric_key", COHORT_KEYS as unknown as string[])
+          .gte("metric_date", since)
+          .order("metric_date", { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (rowErr) throw rowErr;
         if (!data?.length) break;
 
-        all.push(...(data as JourneyRow[]));
+        all.push(...(data as BookingCohortRow[]));
         if (data.length < PAGE_SIZE) break;
       }
 
       setRows(all);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load lead journey.");
+      setError(e instanceof Error ? e.message : "Failed to load the booking cohort.");
     } finally {
       setLoading(false);
     }

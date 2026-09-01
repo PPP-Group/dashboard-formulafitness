@@ -4,6 +4,7 @@ import { cn, formatCount, formatPct } from "@/lib/cn";
 import { AI_CHANNELS, SERIES } from "@/lib/metrics";
 import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
+import { InfoTip, TipRow } from "./ui/InfoTip";
 
 /**
  * Part-to-whole across the three channels. Read-only by design — the channel
@@ -40,7 +41,23 @@ export function AiChannelsCard({
 
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader title="AI Conversations" subtitle={subtitle} />
+      <CardHeader
+        title="AI Conversations"
+        subtitle={subtitle}
+        info={
+          <InfoTip title="AI Conversations" align="left">
+              <TipRow label="What it is">
+                How many times the conversation AI was switched on, split by the channel it was switched on over.
+              </TipRow>
+              <TipRow label="How it is worked out">
+                The AI switches on the first time a lead writes in on a channel. A second message on the same channel continues that conversation and does not count again; writing in on a different channel does. Every voice call counts, inbound or outbound.
+              </TipRow>
+              <TipRow label="Filters">
+                The period picker chooses which activation dates are counted. The origin filter does not apply here. Click a channel for the contacts behind it.
+              </TipRow>
+          </InfoTip>
+        }
+      />
 
       {/*
         justify-between spreads the hero figure and the channel legend across

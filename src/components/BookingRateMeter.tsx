@@ -4,23 +4,24 @@ import { brand, viz } from "@/lib/brand";
 import { cn, formatCount, formatPct } from "@/lib/cn";
 import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
+import { InfoTip, TipRow } from "./ui/InfoTip";
 
 /**
  * A single ratio against a limit — a meter, not a gauge chart and not a
  * two-slice pie. The track is the same ramp as the fill.
  *
- * This is a genuine cohort rate, computed from `lead_journey` (one row per
- * opportunity): of the leads CREATED in the selected period, how many booked
- * a Game Plan call within that SAME period — not "ever, on any date". A lead
- * created today that books next week does not count toward today's rate; it
- * counts toward next week's, the day it's inside that window. This is why the
- * rate can never exceed 100% (unlike the old metrics_daily-based version,
- * which compared two independently-counted totals and could).
+ * This is a genuine cohort rate, computed from the contact rows behind the
+ * lead and booking metrics: of the leads CREATED in the selected period, how
+ * many booked a Game Plan call within that SAME period — not "ever, on any
+ * date". A lead created today that books next week does not count toward
+ * today's rate; it counts toward next week's, the day it's inside that window.
+ * This is why the rate can never exceed 100% (unlike a version comparing two
+ * independently-counted totals, which could).
  *
- * `lead_journey` only captures a stage date the first time an opportunity is
- * observed sitting in that stage (the GHL API exposes no full stage-history
- * log), so very recent activity may be under-counted until the hourly sync
- * has had a chance to observe it.
+ * The booking date comes from the calendar, which records when the appointment
+ * was made and never changes it. An earlier version read a stage date that was
+ * only observed while the opportunity sat in that stage, so anyone who moved
+ * on stopped counting and the history quietly drained away.
  */
 export function BookingRateMeter({
   booked,
@@ -68,7 +69,23 @@ export function BookingRateMeter({
       role={interactive ? "button" : undefined}
       aria-label={interactive ? "Booking rate: show the leads counted" : undefined}
     >
-      <CardHeader title="Booking rate" subtitle={subtitle} />
+      <CardHeader
+        title="Booking rate"
+        subtitle={subtitle}
+        info={
+          <InfoTip title="Booking rate" align="right">
+              <TipRow label="What it is">
+                Of the leads created in the selected period, the share who booked a game plan call inside that same period.
+              </TipRow>
+              <TipRow label="How it is worked out">
+                A cohort rate, not two totals divided. A lead created today who books next week counts toward next week, not today. The booking date comes from the calendar, which never changes it.
+              </TipRow>
+              <TipRow label="Filters">
+                Both ends move with the period picker, so a wider period gives leads more room to book and usually reads higher. The origin filter narrows the cohort to one lead source.
+              </TipRow>
+          </InfoTip>
+        }
+      />
 
       <div
         className={cn(

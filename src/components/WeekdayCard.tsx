@@ -5,6 +5,7 @@ import { WEEKDAY_LABELS } from "@/lib/dates";
 import { cn, formatCount } from "@/lib/cn";
 import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
+import { InfoTip, TipRow } from "./ui/InfoTip";
 
 /**
  * Emphasis, not categorical: the story is "which day is busiest", so the peak
@@ -26,7 +27,23 @@ export function WeekdayCard({
 
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader title="Most active day" subtitle={subtitle} />
+      <CardHeader
+        title="Most active day"
+        subtitle={subtitle}
+        info={
+          <InfoTip title="Most active day" align="right">
+              <TipRow label="What it is">
+                Which day of the week brings the most leads, over the window shown.
+              </TipRow>
+              <TipRow label="How it is worked out">
+                Leads created are grouped by weekday across the whole window, so a busy Monday in one week and a quiet Monday in another average out.
+              </TipRow>
+              <TipRow label="Filters">
+                The period picker sets the window. The origin filter narrows it to one lead source.
+              </TipRow>
+          </InfoTip>
+        }
+      />
 
       <div className={cn("flex-1 px-5 pt-2 pb-5", refetching && "refetching")}>
         {loading ? (

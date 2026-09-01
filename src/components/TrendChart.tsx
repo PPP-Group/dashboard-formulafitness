@@ -16,6 +16,7 @@ import { cn, formatCount } from "@/lib/cn";
 import { SERIES, SeriesId } from "@/lib/metrics";
 import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
+import { InfoTip, TipRow } from "./ui/InfoTip";
 
 type TooltipEntry = { dataKey?: string | number; value?: number };
 
@@ -88,7 +89,23 @@ export function TrendChart({
 
   return (
     <Card className="flex flex-col">
-      <CardHeader title="Metrics over time" subtitle={subtitle} />
+      <CardHeader
+        title="Metrics over time"
+        subtitle={subtitle}
+        info={
+          <InfoTip title="Metrics over time" align="right">
+              <TipRow label="What it is">
+                The same metrics as the cards above, drawn over time so the shape is visible.
+              </TipRow>
+              <TipRow label="How it is worked out">
+                One point per bucket, summing the daily numbers. The granularity picker sets whether a bucket is a day, a week or a month.
+              </TipRow>
+              <TipRow label="Filters">
+                The period picker sets the window drawn. The origin filter narrows every series to one lead source. The legend toggles individual series.
+              </TipRow>
+          </InfoTip>
+        }
+      />
 
       {/* Legend is always present for >= 2 series — identity is never colour-alone. */}
       <div className="flex flex-wrap gap-x-4 gap-y-2 px-5 pb-3">

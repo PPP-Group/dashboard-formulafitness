@@ -32,6 +32,12 @@ export type SeriesDef = {
   source: string | null;
   color: string;
   hint: string;
+  /**
+   * The three things a person needs to trust a number: what it counts, where
+   * the count comes from, and what the pickers at the top do to it. Rendered
+   * in the "i" tip beside the label.
+   */
+  tip: { what: string; how: string; filters: string };
 };
 
 /**
@@ -50,6 +56,11 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     source: null,
     color: SERIES_SLOTS[0],
     hint: "All opportunities created, broken down by lead origin",
+    tip: {
+      what: "Every opportunity created in the pipeline, which is one per form fill, inbound SMS, QR scan or AI voice call.",
+      how: "Counted on the day the opportunity was created in GoHighLevel, in Los Alamitos time. Rebuilt from the pipeline itself, so it matches what you would count by hand.",
+      filters: "The period picker chooses which creation dates are counted. The origin filter narrows it to one lead source. Click the card for the contacts behind it.",
+    },
   },
   game_plan_call_booked: {
     id: "game_plan_call_booked",
@@ -58,7 +69,12 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "game_plan_call_booked",
     source: null,
     color: SERIES_SLOTS[1],
-    hint: "Opportunities entering the “Lead Booked 15 min Call” stage",
+    hint: "Game plan calls booked, counted from the calendar on the day they were booked",
+    tip: {
+      what: "Free 15 minute game plan calls that were booked, whether or not they were later held or cancelled.",
+      how: "Counted from the calendar, on the day the appointment was made. Not from the pipeline stage: an opportunity that moved past that stage stops sitting in it, and its booking would vanish from the history.",
+      filters: "The period picker chooses which booking dates are counted. The origin filter uses the lead origin of the contact who booked. Click the card for the contacts behind it.",
+    },
   },
   consultation_booked: {
     id: "consultation_booked",
@@ -67,7 +83,12 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "consultation_booked",
     source: null,
     color: SERIES_SLOTS[2],
-    hint: "Opportunities entering the “Paid Consultation Requested” stage",
+    hint: "Paid consultations booked, counted from the calendar on the day they were booked",
+    tip: {
+      what: "Paid $100 initial consultations that were booked, whether or not they were later held or cancelled.",
+      how: "Counted from the consultation calendar, on the day the appointment was made, for the same reason as the game plan call.",
+      filters: "The period picker chooses which booking dates are counted. The origin filter uses the lead origin of the contact who booked. Click the card for the contacts behind it.",
+    },
   },
   consultation_won: {
     id: "consultation_won",
@@ -78,6 +99,11 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     source: null,
     color: SERIES_SLOTS[3],
     hint: "Opportunities entering the “Closed Won” stage — signed up for a program",
+    tip: {
+      what: "Opportunities that reached Closed Won, meaning the person signed up for a program.",
+      how: "Counted on the day the opportunity entered Closed Won. Won is a final stage, so nobody leaves it and the history stays intact.",
+      filters: "The period picker chooses which closing dates are counted. The origin filter narrows it to one lead source. Click the card for the contacts behind it.",
+    },
   },
   ai_conversations: {
     id: "ai_conversations",
@@ -86,7 +112,12 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: null,
     color: SERIES_SLOTS[4],
-    hint: "AI activations across voice, SMS and email — voice counted per message, SMS/email counted once per conversation per day",
+    hint: "AI activations across voice, SMS and email — the first time a lead writes in on a channel, and every voice call",
+    tip: {
+      what: "How many times the conversation AI was switched on across voice, SMS and email.",
+      how: "The AI switches on the first time a lead writes in on a channel. A second message on the same channel continues that conversation and does not count again; writing in on a different channel does. Every voice call counts.",
+      filters: "The period picker chooses which activation dates are counted. The origin filter does not apply. Click a channel for the contacts behind it.",
+    },
   },
 
   // Channels live in their own card with their own legend, so they restart at
@@ -100,7 +131,12 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     color: SERIES_SLOTS[0],
     // One activation per conversation per day, not one per message — a
     // back-and-forth thread with 10 texts counts once, the same as one with 1.
-    hint: "Conversations where the AI was activated over SMS",
+    hint: "The first inbound SMS from a contact, which is what switches the AI on",
+    tip: {
+      what: "The AI switching on over SMS.",
+      how: "The first inbound SMS from a contact. Later messages on SMS continue that conversation.",
+      filters: "The period picker chooses which activation dates are counted.",
+    },
   },
   ai_call: {
     id: "ai_call",
@@ -109,7 +145,12 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     metricKey: "ai_conversations",
     source: "call",
     color: SERIES_SLOTS[1],
-    hint: "Messages exchanged over voice calls",
+    hint: "Voice calls, each one an activation of the voice AI",
+    tip: {
+      what: "The AI switching on over a voice call.",
+      how: "One per call, inbound or outbound, because each call is its own conversation.",
+      filters: "The period picker chooses which call dates are counted.",
+    },
   },
   ai_email: {
     id: "ai_email",
@@ -119,7 +160,12 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     source: "email",
     color: SERIES_SLOTS[2],
     // Same per-conversation-per-day counting as SMS.
-    hint: "Conversations where the AI was activated over email",
+    hint: "The first inbound email from a contact, which is what switches the AI on",
+    tip: {
+      what: "The AI switching on over email.",
+      how: "The first inbound email from a contact. Later emails continue that conversation.",
+      filters: "The period picker chooses which activation dates are counted.",
+    },
   },
 };
 

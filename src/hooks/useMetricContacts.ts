@@ -147,7 +147,7 @@ export function useMetricContacts(
 
   useEffect(() => {
     if (!token || !metricKey) return;
-    // Same shape as useMetrics/useLeadJourney: the fetch is kicked off through
+    // Same shape as useMetrics/useBookingCohort: the fetch is kicked off through
     // a local starter so the effect body itself stays free of state writes.
     let alive = true;
     const start = () => {

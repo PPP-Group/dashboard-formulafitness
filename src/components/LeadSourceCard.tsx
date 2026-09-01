@@ -6,6 +6,7 @@ import { cn, formatCount, formatPct } from "@/lib/cn";
 import { LEAD_SOURCES, mergeSources } from "@/lib/metrics";
 import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
+import { InfoTip, TipRow } from "./ui/InfoTip";
 
 /**
  * Ranked bars, single hue — deliberately NOT eight categorical colours.
@@ -43,6 +44,19 @@ export function LeadSourceCard({
       <CardHeader
         title="Leads by origin"
         subtitle={subtitle}
+        info={
+          <InfoTip title="Leads by origin" align="right">
+              <TipRow label="What it is">
+                Where the leads created in the period came from.
+              </TipRow>
+              <TipRow label="How it is worked out">
+                The lead source recorded on the opportunity in GoHighLevel, tidied into one label per real origin. The website form and the older [04/26] form are the same form and are counted together; the Tony Tran site is kept separate.
+              </TipRow>
+              <TipRow label="Filters">
+                The period picker chooses which creation dates are counted. Clicking a slice sets the origin filter for the whole page.
+              </TipRow>
+          </InfoTip>
+        }
         action={
           selected ? (
             <button

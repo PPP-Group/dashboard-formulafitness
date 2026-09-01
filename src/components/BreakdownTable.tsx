@@ -5,6 +5,7 @@ import { cn, formatCount } from "@/lib/cn";
 import { SERIES, SeriesId } from "@/lib/metrics";
 import { Card, CardHeader } from "./ui/Card";
 import { Skeleton } from "./ui/Skeleton";
+import { InfoTip, TipRow } from "./ui/InfoTip";
 
 /**
  * The table view every chart on this page is measured against — the
@@ -26,7 +27,23 @@ export function BreakdownTable({
 }) {
   return (
     <Card className="flex flex-col overflow-hidden">
-      <CardHeader title="Breakdown" subtitle={subtitle} />
+      <CardHeader
+        title="Breakdown"
+        subtitle={subtitle}
+        info={
+          <InfoTip title="Breakdown" align="right">
+              <TipRow label="What it is">
+                Every metric, period by period, as a table you can read across.
+              </TipRow>
+              <TipRow label="How it is worked out">
+                The same daily numbers as the cards above, grouped into the buckets the granularity picker sets: days, weeks or months.
+              </TipRow>
+              <TipRow label="Filters">
+                The period picker sets how many buckets are shown and how wide each one is. The origin filter narrows every row to one lead source.
+              </TipRow>
+          </InfoTip>
+        }
+      />
 
       <div className={cn("min-w-0", refetching && "refetching")}>
         {loading ? (

@@ -30,11 +30,17 @@ export function CardHeader({
   title,
   subtitle,
   action,
+  info,
   className,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
   action?: ReactNode;
+  /**
+   * Contents of the "i" tip beside the title. Every card passes one: a number
+   * whose definition is not on screen is a number people guess at.
+   */
+  info?: ReactNode;
   className?: string;
 }) {
   return (
@@ -45,7 +51,10 @@ export function CardHeader({
       )}
     >
       <div className="min-w-0">
-        <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
+        <h2 className="flex items-center gap-1.5 text-[15px] font-semibold text-ink">
+          <span className="truncate">{title}</span>
+          {info}
+        </h2>
         {subtitle ? (
           <p className="mt-0.5 text-xs text-ink-soft">{subtitle}</p>
         ) : null}
