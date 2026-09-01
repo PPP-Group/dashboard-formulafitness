@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+
+/** Panel size, needed up front to decide whether it fits below the icon. */
+const PANEL_W = 288;
+const PANEL_MAX_H = 260;
+const GAP = 8;
+/** Keeps the panel off the very edge of the window. */
+const MARGIN = 12;
+
+type Coords = { top: number; left: number; above: boolean };
 
 /**
  * The "what am I looking at" affordance next to a card title.
@@ -11,6 +21,15 @@ import { cn } from "@/lib/cn";
  * and a reply rate that matches the channel reads differently from one that
  * does not. Those definitions used to live only in the repo, where the person
  * reading the number never goes. They live here now.
+ *
+ * The panel renders in a portal on the body rather than inside the card. Cards
+ * are free to clip their own contents — the breakdown card sets overflow-hidden
+ * so its table corners stay rounded — and an absolutely positioned panel inside
+ * one gets cut off no matter what z-index it carries. Fixed coordinates off the
+ * icon's own rect sidestep every ancestor.
+ *
+ * It flips above the icon when there is not enough room below, which is what
+ * the last card on the page always hits.
  *
  * Opens on hover for a mouse and on focus or click for a keyboard, because
  * hover alone is unreachable without one. Escape closes it.
@@ -23,12 +42,41 @@ export function InfoTip({
   /** Screen-reader label: "About <title>". */
   title: string;
   children: React.ReactNode;
-  /** Which edge the panel is pinned to, so it never runs off a narrow card. */
+  /** Which edge of the icon the panel lines up with, space permitting. */
   align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<Coords | null>(null);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const panelId = useId();
+
+  const place = useCallback(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+
+    const roomBelow = window.innerHeight - r.bottom;
+    const above = roomBelow < PANEL_MAX_H && r.top > roomBelow;
+
+    let left = align === "right" ? r.right - PANEL_W : r.left;
+    left = Math.min(
+      Math.max(left, MARGIN),
+      Math.max(MARGIN, window.innerWidth - PANEL_W - MARGIN),
+    );
+
+    setCoords({
+      top: above ? r.top - GAP : r.bottom + GAP,
+      left,
+      above,
+    });
+  }, [align]);
+
+  // Measured in the handler that opens it, not in an effect: the icon's rect is
+  // already there to read, and the panel is never rendered at 0,0 for a frame.
+  const show = useCallback(() => {
+    place();
+    setOpen(true);
+  }, [place]);
 
   useEffect(() => {
     if (!open) return;
@@ -41,20 +89,56 @@ export function InfoTip({
     const onPointer = (e: PointerEvent) => {
       if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
     };
+    // Fixed coordinates go stale the moment anything moves underneath.
+    const onMove = () => place();
 
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointer);
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
     return () => {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
     };
-  }, [open]);
+  }, [open, place]);
+
+  // No mounted flag needed: the panel only exists once someone opens it, and
+  // `open` starts false, so the server and the first client render agree.
+  const panel =
+    open && coords && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            id={panelId}
+            role="tooltip"
+            onMouseEnter={show}
+            onMouseLeave={() => setOpen(false)}
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              width: PANEL_W,
+              maxHeight: PANEL_MAX_H,
+              transform: coords.above ? "translateY(-100%)" : undefined,
+            }}
+            className={cn(
+              "z-[100] overflow-y-auto rounded-xl border border-line bg-surface p-3 text-left",
+              "text-xs leading-relaxed font-normal text-ink-soft normal-case",
+              "shadow-[0_8px_24px_rgba(15,23,42,0.12)]",
+            )}
+          >
+            {children}
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <span
       ref={wrapRef}
       className="relative inline-flex align-middle"
-      onMouseEnter={() => setOpen(true)}
+      onMouseEnter={show}
       onMouseLeave={() => setOpen(false)}
     >
       <button
@@ -70,34 +154,21 @@ export function InfoTip({
         )}
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          if (open) setOpen(false);
+          else show();
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={show}
         onBlur={() => setOpen(false)}
       >
         i
       </button>
-
-      {open ? (
-        <span
-          id={panelId}
-          role="tooltip"
-          className={cn(
-            "absolute top-6 z-50 w-72 rounded-xl border border-line bg-surface p-3 text-left",
-            "text-xs leading-relaxed font-normal text-ink-soft normal-case",
-            "shadow-[0_8px_24px_rgba(15,23,42,0.12)]",
-            align === "right" ? "right-0" : "left-0",
-          )}
-        >
-          {children}
-        </span>
-      ) : null}
+      {panel}
     </span>
   );
 }
 
 /**
- * One labelled line inside a tip. Keeps every card explaining the same four
+ * One labelled line inside a tip. Keeps every card explaining the same few
  * things in the same order: what it is, how it is worked out, and what the
  * period and origin filters do to it.
  */
