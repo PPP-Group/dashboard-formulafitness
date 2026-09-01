@@ -17,12 +17,24 @@
  * Regenerate with scripts/dashboard_v2/build_message_names.py in the ops repo
  * whenever snippet copy changes enough to shift a fingerprint.
  *
+ * Six entries were added by hand after the 90-day rebuild: high-volume copy
+ * that has since been edited in GoHighLevel, so the shingle match no longer
+ * finds it in the library. They are marked "retired copy" where a current
+ * snippet says the same thing. One of them, the Jessica opener, is the best
+ * performing message in the account.
+ *
  * One known ambiguity: `formula_fitness_your_consultation_formula_fitness`
  * matched "Email: Confirmed Consultation" 16 times and
  * "Email: Payment Reminder - 2h" 9 times. The two share most of their body;
  * the majority wins and the minority is folded in with it.
  */
 export const MESSAGE_NAMES: Record<string, string> = {
+  "following_still_looking_get_star": "SMS: Follow-up (still looking to get started)",
+  "for_reaching_out_formula_fitness": "SMS: Welcome (retired copy)",
+  "free_min_call_with_formula_fitne": "SMS: Confirmed Call (retired copy)",
+  "jessica_from_formula_fitness_wha": "SMS: Jessica Opener (what do you want to work on)",
+  "quick_reminder_our_initial_consu": "SMS: Consultation Value Reminder",
+  "your_free_min_call_with_formula": "SMS: Call in 1h Reminder (retired copy)",
   "all_set_registered_you_the_formula": "SMS: Referral Program Confirmation",
   "ask_from_promise_one_quick_question": "SMS: NPS Final Request (Day 19)",
   "been_training_with_for_couple_weeks": "SMS: NPS Request (Day 14)",

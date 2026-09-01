@@ -13,8 +13,8 @@ export type DrillTarget = {
   label: string;
   from: string;
   to: string;
-  /** null = every source for this metric. */
-  source?: string | null;
+  /** null = every source for this metric. A list matches any of them. */
+  source?: string | string[] | null;
   /** Period text under the heading. */
   periodLabel: string;
 };

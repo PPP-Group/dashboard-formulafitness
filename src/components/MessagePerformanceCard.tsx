@@ -167,9 +167,10 @@ export function MessagePerformanceCard({
 
         {shown.length > 0 ? (
           <p className="mt-3 text-[11px] text-ink-faint">
-            Replies are credited to the last automated message sent before them.
-            Reminders and confirmations are counted here too, and are not asking
-            for a reply.
+            A reply is credited to the last automated message sent before it on
+            the same channel. Reminders and confirmations count here too, and are
+            not asking for a reply. No contact has ever replied to an email in
+            this account, so an email row reads 0% by nature, not by performance.
           </p>
         ) : null}
       </div>

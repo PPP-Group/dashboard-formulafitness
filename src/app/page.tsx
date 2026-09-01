@@ -448,7 +448,7 @@ function DashboardPageInner() {
                       label: `Replied to ${step.label}`,
                       from: view.from,
                       to: view.to,
-                      source: step.id,
+                      source: step.ids,
                       periodLabel,
                     })
                   }

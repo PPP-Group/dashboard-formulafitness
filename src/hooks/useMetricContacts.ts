@@ -63,14 +63,16 @@ export function useMetricContacts(
   metricKey: string | null,
   from: string,
   to: string,
-  source?: string | null,
+  source?: string | string[] | null,
 ): ContactsState {
   const [result, setResult] = useState<Result | null>(null);
   const subaccountId = useRef<string | null>(null);
 
-  const token = metricKey
-    ? `${metricKey}|${from}|${to}|${source ?? ""}`
-    : null;
+  // A message can sit behind several fingerprints, so the source is a list as
+  // often as it is a single value. Joining it keeps the token a primitive.
+  const sourceKey = Array.isArray(source) ? source.join(",") : (source ?? "");
+
+  const token = metricKey ? `${metricKey}|${from}|${to}|${sourceKey}` : null;
 
   const load = useCallback(
     async (
@@ -78,7 +80,7 @@ export function useMetricContacts(
       key: string,
       start: string,
       end: string,
-      src?: string | null,
+      src?: string | string[] | null,
     ) => {
       try {
         if (!subaccountId.current) {
@@ -104,7 +106,11 @@ export function useMetricContacts(
           .order("metric_date", { ascending: false })
           .limit(MAX_ROWS);
 
-        if (src) request = request.eq("source", src);
+        if (Array.isArray(src)) {
+          if (src.length > 0) request = request.in("source", src);
+        } else if (src) {
+          request = request.eq("source", src);
+        }
 
         const { data, error: rowErr } = await request;
 

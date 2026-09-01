@@ -31,7 +31,16 @@ export const ENGAGEMENT_KEYS = [
 ] as const;
 
 export type StepPerformance = {
-  /** The fingerprint as stored in `source`. */
+  /**
+   * Every fingerprint stored in `source` that carries this message.
+   *
+   * One snippet can produce several fingerprints: the copy gets edited, or the
+   * body carries a date that shifts the first six words. They are the same
+   * message to the person reading the table, so they are summed into one row
+   * and the drill-down queries all of them.
+   */
+  ids: string[];
+  /** The highest-volume fingerprint in the group. Stable list key. */
   id: string;
   /** Readable form of the fingerprint. */
   label: string;
@@ -55,11 +64,6 @@ export function humanizeFingerprint(id: string): string {
   const known = MESSAGE_NAMES[id];
   if (known) return known;
   return `…${id.split("_").join(" ")}…`;
-}
-
-/** True when the label is a real snippet name rather than a body extract. */
-export function isNamedMessage(id: string): boolean {
-  return Boolean(MESSAGE_NAMES[id]);
 }
 
 /**
@@ -88,16 +92,30 @@ export function buildStepPerformance(
     }
   }
 
-  const out: StepPerformance[] = [];
+  // One snippet, one row. Grouping by label rather than by fingerprint is what
+  // stops the table showing "Email: Confirmed Call" three times because the
+  // copy was edited twice.
+  const groups = new Map<string, { ids: string[]; sent: number; replied: number }>();
   for (const [id, sends] of sent) {
     if (sends < minSends) continue;
-    const got = replied.get(id) ?? 0;
+    const label = humanizeFingerprint(id);
+    const group = groups.get(label) ?? { ids: [], sent: 0, replied: 0 };
+    group.ids.push(id);
+    group.sent += sends;
+    group.replied += replied.get(id) ?? 0;
+    groups.set(label, group);
+  }
+
+  const out: StepPerformance[] = [];
+  for (const [label, group] of groups) {
+    group.ids.sort((a, b) => (sent.get(b) ?? 0) - (sent.get(a) ?? 0));
     out.push({
-      id,
-      label: humanizeFingerprint(id),
-      sent: sends,
-      replied: got,
-      rate: sends > 0 ? (got / sends) * 100 : null,
+      ids: group.ids,
+      id: group.ids[0],
+      label,
+      sent: group.sent,
+      replied: group.replied,
+      rate: group.sent > 0 ? (group.replied / group.sent) * 100 : null,
     });
   }
 
