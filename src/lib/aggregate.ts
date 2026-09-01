@@ -74,6 +74,27 @@ export function sumInRange(
 }
 
 /**
+ * Total for one metric_key restricted to a single `source`, for metrics that
+ * have no series definition of their own.
+ */
+export function sumMetricSource(
+  rows: MetricRow[],
+  metricKey: string,
+  source: string | null,
+  from: string,
+  to: string,
+): number {
+  let total = 0;
+  for (const row of rows) {
+    if (row.metric_key !== metricKey) continue;
+    if (source !== null && row.source !== source) continue;
+    if (!inRange(row.metric_date, from, to)) continue;
+    total += row.count;
+  }
+  return total;
+}
+
+/**
  * Totals per `source` for one metric_key — powers the breakdown cards.
  * Returns every source present in the data, including ones not in the
  * documented category list.

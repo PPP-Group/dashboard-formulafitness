@@ -10,34 +10,33 @@ import { InfoTip, TipRow } from "./ui/InfoTip";
  * Part-to-whole across the three channels. Read-only by design — the channel
  * split is information, not a filter dimension.
  *
- * The three channels are counted two different ways. SMS and email count
- * activations: one per conversation per day, however many messages that
- * conversation had — a 10-text back-and-forth counts the same as a single
- * text, because the AI activates once per thread and then keeps replying to
- * whatever comes next. Voice is left as a raw message count, per the client's
- * explicit request. The caption states this rather than leaving the reader to
- * assume they're all counted the same way.
+ * Two different questions, both worth asking: how often the AI got switched on,
+ * and how much work it then did. An earlier version counted a switch-on for
+ * every message a lead sent, which put 2173 activations against 228 leads. A
+ * lead switches the AI on the first time they write in on a channel; after
+ * that they are having a conversation, not starting one. Voice is the
+ * exception and every call counts, because each call is its own conversation.
  */
 export function AiChannelsCard({
   totals,
+  interactions,
   loading,
   refetching,
   subtitle,
   onSelectChannel,
 }: {
+  /** Activations per channel, in AI_CHANNELS order. */
   totals: number[];
+  /** Messages sent per channel, same order. */
+  interactions: number[];
   loading: boolean;
   refetching: boolean;
   subtitle: string;
-  /**
-   * Opens the contacts who replied on that channel. Note this drills into
-   * `msg_reply`, not `ai_conversations` — the older metric counts activations
-   * and keeps no contact list, so the honest thing to show is who actually
-   * wrote in.
-   */
+  /** Opens the contacts whose first message on that channel switched it on. */
   onSelectChannel?: (channel: "sms" | "call" | "email") => void;
 }) {
   const total = totals.reduce((a, b) => a + b, 0);
+  const totalInteractions = interactions.reduce((a, b) => a + b, 0);
 
   return (
     <Card className="flex h-full flex-col">
@@ -52,8 +51,11 @@ export function AiChannelsCard({
               <TipRow label="How it is worked out">
                 The AI switches on the first time a lead writes in on a channel. A second message on the same channel continues that conversation and does not count again; writing in on a different channel does. Every voice call counts, inbound or outbound.
               </TipRow>
+              <TipRow label="Messages sent">
+                How much the AI then did: every message sent from the conversation view on that channel, plus every call. That view covers the conversation AI and anyone on the team, and GoHighLevel does not separate the two.
+              </TipRow>
               <TipRow label="Filters">
-                The period picker chooses which activation dates are counted. The origin filter does not apply here. Click a channel for the contacts behind it.
+                The period picker chooses which activation dates are counted. The origin filter does not apply here. Click a channel for the contacts whose first message switched it on.
               </TipRow>
           </InfoTip>
         }
@@ -79,12 +81,20 @@ export function AiChannelsCard({
         ) : (
           <>
             <div>
-              <p className="text-[32px] leading-none font-semibold text-ink">
-                {formatCount(total)}
-              </p>
-              <p className="mt-1 text-xs text-ink-muted">
-                AI activations — SMS/email per conversation, voice per message
-              </p>
+              <div className="flex items-end gap-6">
+                <div>
+                  <p className="text-[32px] leading-none font-semibold text-ink">
+                    {formatCount(total)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted">Times switched on</p>
+                </div>
+                <div>
+                  <p className="text-[22px] leading-none font-semibold text-ink-soft">
+                    {formatCount(totalInteractions)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted">Messages sent</p>
+                </div>
+              </div>
 
               {/* 2px surface gaps separate segments — no borders around marks. */}
               <div
@@ -145,7 +155,7 @@ export function AiChannelsCard({
                     role={clickable ? "button" : undefined}
                     aria-label={
                       clickable
-                        ? `${SERIES[id].label}: show who replied`
+                        ? `${SERIES[id].label}: show who switched it on`
                         : undefined
                     }
                   >

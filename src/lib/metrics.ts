@@ -183,6 +183,7 @@ export const CORE_METRIC_KEYS = [
   "consultation_booked",
   "consultation_won",
   "ai_conversations",
+  "ai_interactions",
 ] as const;
 
 export type SourceOption = { value: string; label: string };

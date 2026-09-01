@@ -12,6 +12,7 @@ import {
   deltaPct,
   sumBySource,
   sumInRange,
+  sumMetricSource,
 } from "@/lib/aggregate";
 import {
   addDays,
@@ -240,6 +241,10 @@ function DashboardPageInner() {
       ),
       // Cross-metric comparisons: unfiltered on both sides, always.
       ai: AI_CHANNELS.map((id) => sumInRange(rows, id, from, to)),
+      // Same three channels, but the messages sent rather than the switch-ons.
+      aiInteractions: AI_CHANNELS.map((id) =>
+        sumMetricSource(rows, "ai_interactions", SERIES[id].source, from, to),
+      ),
       // From metric_contacts, not the daily counts: a genuine cohort rate (booked
       // within the SAME window the lead was created), and — since
       // the contact rows carry `source` per contact — one the origin filter
@@ -408,15 +413,14 @@ function DashboardPageInner() {
               <h2 className="sr-only">AI conversations</h2>
               <AiChannelsCard
                 totals={view.ai}
+                interactions={view.aiInteractions}
                 loading={firstLoad}
                 refetching={refetching}
                 subtitle={periodLabel}
                 onSelectChannel={(channel) =>
                   setDrill({
-                    // ai_conversations counts activations and keeps no contact
-                    // list, so the drill-down shows who actually wrote in.
-                    metricKey: "msg_reply",
-                    label: `Replied over ${channel === "call" ? "voice" : channel}`,
+                    metricKey: "ai_conversations",
+                    label: `AI switched on over ${channel === "call" ? "voice" : channel}`,
                     from: view.from,
                     to: view.to,
                     source: channel,
