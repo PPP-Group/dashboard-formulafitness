@@ -10,6 +10,12 @@ const PANEL_MAX_H = 260;
 const GAP = 8;
 /** Keeps the panel off the very edge of the window. */
 const MARGIN = 12;
+/**
+ * Grace period before a hover-out closes the panel. The pointer has to cross
+ * the gap between the icon and the panel, and it is nowhere during the
+ * crossing — without this the panel closes underneath it every time.
+ */
+const CLOSE_DELAY_MS = 160;
 
 type Coords = { top: number; left: number; above: boolean };
 
@@ -26,13 +32,15 @@ type Coords = { top: number; left: number; above: boolean };
  * are free to clip their own contents — the breakdown card sets overflow-hidden
  * so its table corners stay rounded — and an absolutely positioned panel inside
  * one gets cut off no matter what z-index it carries. Fixed coordinates off the
- * icon's own rect sidestep every ancestor.
+ * icon's own rect sidestep every ancestor. It flips above the icon when there
+ * is no room below, which the last card on the page always hits.
  *
- * It flips above the icon when there is not enough room below, which is what
- * the last card on the page always hits.
+ * Two ways in, because a tip you cannot finish reading is not a tip:
  *
- * Opens on hover for a mouse and on focus or click for a keyboard, because
- * hover alone is unreachable without one. Escape closes it.
+ * - Hover opens it, and it stays open while the pointer is over the icon *or*
+ *   the panel, so a longer tip can be scrolled.
+ * - Clicking pins it. A pinned tip ignores hover entirely and closes only on an
+ *   outside click or Escape, which is also what a touch screen needs.
  */
 export function InfoTip({
   title,
@@ -46,9 +54,25 @@ export function InfoTip({
   align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [coords, setCoords] = useState<Coords | null>(null);
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panelId = useId();
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const close = useCallback(() => {
+    cancelClose();
+    setOpen(false);
+    setPinned(false);
+  }, [cancelClose]);
 
   const place = useCallback(() => {
     const el = wrapRef.current;
@@ -64,30 +88,38 @@ export function InfoTip({
       Math.max(MARGIN, window.innerWidth - PANEL_W - MARGIN),
     );
 
-    setCoords({
-      top: above ? r.top - GAP : r.bottom + GAP,
-      left,
-      above,
-    });
+    setCoords({ top: above ? r.top - GAP : r.bottom + GAP, left, above });
   }, [align]);
 
   // Measured in the handler that opens it, not in an effect: the icon's rect is
   // already there to read, and the panel is never rendered at 0,0 for a frame.
   const show = useCallback(() => {
+    cancelClose();
     place();
     setOpen(true);
-  }, [place]);
+  }, [cancelClose, place]);
+
+  /** Hover-out. A pinned tip ignores it; otherwise it closes after the grace. */
+  const scheduleClose = useCallback(() => {
+    if (pinned) return;
+    cancelClose();
+    closeTimer.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
+  }, [pinned, cancelClose]);
+
+  useEffect(() => cancelClose, [cancelClose]);
 
   useEffect(() => {
     if (!open) return;
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     };
-    // A click anywhere else dismisses it, so a tapped tip on a touch screen
-    // does not stay stuck open with no obvious way to close it.
+    // The panel lives in a portal, so it is not inside the wrapper. Both have
+    // to count as "inside", or dragging the panel's own scrollbar dismisses it.
     const onPointer = (e: PointerEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      close();
     };
     // Fixed coordinates go stale the moment anything moves underneath.
     const onMove = () => place();
@@ -102,7 +134,7 @@ export function InfoTip({
       window.removeEventListener("scroll", onMove, true);
       window.removeEventListener("resize", onMove);
     };
-  }, [open, place]);
+  }, [open, place, close]);
 
   // No mounted flag needed: the panel only exists once someone opens it, and
   // `open` starts false, so the server and the first client render agree.
@@ -110,10 +142,11 @@ export function InfoTip({
     open && coords && typeof document !== "undefined"
       ? createPortal(
           <div
+            ref={panelRef}
             id={panelId}
             role="tooltip"
-            onMouseEnter={show}
-            onMouseLeave={() => setOpen(false)}
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
             style={{
               position: "fixed",
               top: coords.top,
@@ -123,7 +156,7 @@ export function InfoTip({
               transform: coords.above ? "translateY(-100%)" : undefined,
             }}
             className={cn(
-              "z-[100] overflow-y-auto rounded-xl border border-line bg-surface p-3 text-left",
+              "thin-scroll z-[100] overflow-y-auto rounded-xl border border-line bg-surface p-3 text-left",
               "text-xs leading-relaxed font-normal text-ink-soft normal-case",
               "shadow-[0_8px_24px_rgba(15,23,42,0.12)]",
             )}
@@ -139,7 +172,7 @@ export function InfoTip({
       ref={wrapRef}
       className="relative inline-flex align-middle"
       onMouseEnter={show}
-      onMouseLeave={() => setOpen(false)}
+      onMouseLeave={scheduleClose}
     >
       <button
         type="button"
@@ -150,15 +183,20 @@ export function InfoTip({
           "flex h-4 w-4 items-center justify-center rounded-full border text-[10px] leading-none font-semibold transition-colors",
           "border-line text-ink-faint hover:border-ink-soft hover:text-ink-soft",
           "focus-visible:ring-2 focus-visible:ring-ink-soft focus-visible:outline-none",
-          open && "border-ink-soft text-ink-soft",
+          (open || pinned) && "border-ink-soft text-ink-soft",
         )}
         onClick={(e) => {
+          // Never let the click reach a card that is itself clickable.
           e.stopPropagation();
-          if (open) setOpen(false);
-          else show();
+          if (pinned) {
+            close();
+          } else {
+            show();
+            setPinned(true);
+          }
         }}
         onFocus={show}
-        onBlur={() => setOpen(false)}
+        onBlur={scheduleClose}
       >
         i
       </button>
