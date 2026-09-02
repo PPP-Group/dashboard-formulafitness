@@ -91,4 +91,8 @@ export const MESSAGE_NAMES: Record<string, string> = {
   "your_free_min_game_plan_call": "SMS: Confirmed Call",
   "your_free_minute_game_plan_call": "SMS: Call in 1h Reminder",
   "your_quick_start_guide_apps_download": "Email: Member Welcome Email",
+  // Not a snippet: the automation sends the lead's own first name and a
+  // question mark, so the body carries no words to fingerprint. The
+  // collection workflows detect that shape and key it here.
+  name_only_nudge: "SMS: Name Only Nudge (“John?”)",
 };
