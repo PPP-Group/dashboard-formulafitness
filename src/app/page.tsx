@@ -37,15 +37,13 @@ import { downloadCsv, toCsv } from "@/lib/csv";
 import { cohortBookingRate } from "@/lib/journey";
 import {
   buildEngagementSummary,
-  buildEngagementSummaryByOrigin,
   buildStepPerformance,
-  buildStepPerformanceByOrigin,
-  OriginMap,
+  hasOriginRows,
+  rowsForOrigin,
   StepPerformance,
-  sumContactEvents,
+  sumEngagement,
 } from "@/lib/engagement";
 import { useEngagement } from "@/hooks/useEngagement";
-import { useEngagementContacts } from "@/hooks/useEngagementContacts";
 import { useBookingCohort } from "@/hooks/useBookingCohort";
 import { useMetrics } from "@/hooks/useMetrics";
 import { AiChannelsCard } from "@/components/AiChannelsCard";
@@ -89,13 +87,6 @@ function DashboardPageInner() {
     loading: engagementLoading,
     refresh: refreshEngagement,
   } = useEngagement();
-  // Contact-level engagement, which is the only way to scope the AI and message
-  // cards by lead origin — their `source` holds the channel or the message, so
-  // the origin has to come from the person.
-  const {
-    rows: engagementContacts,
-    unavailable: originScopeUnavailable,
-  } = useEngagementContacts();
 
   // Which number the contacts popup is currently open for.
   const [drill, setDrill] = useState<DrillTarget | null>(null);
@@ -143,7 +134,7 @@ function DashboardPageInner() {
    * opportunity wins where somebody has more than one, so a lead who came back
    * through a different route is counted as they most recently arrived.
    */
-  const origins: OriginMap = useMemo(() => {
+  const origins = useMemo(() => {
     const map = new Map<string, { source: string; date: string }>();
     for (const r of journeyRows) {
       if (r.metric_key !== "form_submissions_total") continue;
@@ -157,11 +148,11 @@ function DashboardPageInner() {
 
   /**
    * Whether the message and AI cards can honour the origin filter. They need
-   * the contact rows; without them the cards keep showing unfiltered totals
-   * and say so, rather than rendering zeros.
+   * the origin-dimensioned rows; until the rebuild that writes them has run,
+   * the cards keep showing unfiltered totals and say so, rather than
+   * rendering zeros against a filtered heading.
    */
-  const scopeByContact =
-    leadSource !== null && !originScopeUnavailable && engagementContacts.length > 0;
+  const scopeByOrigin = leadSource !== null && hasOriginRows(engagementRows);
 
   /**
    * Every pipeline metric carries the lead origin in `source`: the pipeline
@@ -185,6 +176,12 @@ function DashboardPageInner() {
   );
 
   const view = useMemo(() => {
+    // The engagement rows for the selected origin, flattened back into the
+    // shape of the plain metrics so every builder below stays unaware of the
+    // extra dimension. Empty when nothing is filtered.
+    const originRows =
+      scopeByOrigin && leadSource ? rowsForOrigin(engagementRows, leadSource) : [];
+
     // The selected bucket is what every headline number reports on.
     const sel = bucketBounds(anchor, granularity);
     const from = sel.start;
@@ -288,35 +285,31 @@ function DashboardPageInner() {
       // filtered card lists the same population the number counted. Null when
       // nothing is filtered, which the drawer reads as "everyone".
       originContactIds:
-        scopeByContact && leadSource
+        scopeByOrigin && leadSource
           ? [...origins].filter(([, o]) => o === leadSource).map(([id]) => id)
           : null,
       // AI activations and AI messages by channel. With an origin selected
-      // these are rebuilt from the contact rows, because `source` here is the
-      // channel and has no room left for the origin.
+      // these come from the origin-dimensioned rows, because `source` here is
+      // the channel and has no room left for the origin.
       ai: AI_CHANNELS.map((id) =>
-        scopeByContact && leadSource
-          ? sumContactEvents(
-              engagementContacts,
+        scopeByOrigin
+          ? sumEngagement(
+              originRows,
               "ai_conversations",
               from,
               to,
-              origins,
-              leadSource,
               SERIES[id].source ?? undefined,
             )
           : sumInRange(rows, id, from, to),
       ),
       // Same three channels, but the messages sent rather than the switch-ons.
       aiInteractions: AI_CHANNELS.map((id) =>
-        scopeByContact && leadSource
-          ? sumContactEvents(
-              engagementContacts,
+        scopeByOrigin
+          ? sumEngagement(
+              originRows,
               "ai_interactions",
               from,
               to,
-              origins,
-              leadSource,
               SERIES[id].source ?? undefined,
             )
           : sumMetricSource(rows, "ai_interactions", SERIES[id].source, from, to),
@@ -338,26 +331,16 @@ function DashboardPageInner() {
       // window, because a line needs more than one point, a weekday
       // distribution needs several weekdays, and the table is one row per
       // bucket. A total is not one of those.
-      engagement:
-        scopeByContact && leadSource
-          ? buildEngagementSummaryByOrigin(
-              engagementContacts,
-              from,
-              to,
-              origins,
-              leadSource,
-            )
-          : buildEngagementSummary(engagementRows, from, to),
-      steps:
-        scopeByContact && leadSource
-          ? buildStepPerformanceByOrigin(
-              engagementContacts,
-              from,
-              to,
-              origins,
-              leadSource,
-            )
-          : buildStepPerformance(engagementRows, from, to),
+      engagement: buildEngagementSummary(
+        scopeByOrigin ? originRows : engagementRows,
+        from,
+        to,
+      ),
+      steps: buildStepPerformance(
+        scopeByOrigin ? originRows : engagementRows,
+        from,
+        to,
+      ),
     };
   }, [
     rows,
@@ -368,8 +351,7 @@ function DashboardPageInner() {
     leadSource,
     selection,
     origins,
-    engagementContacts,
-    scopeByContact,
+    scopeByOrigin,
     today,
     minDate,
   ]);
@@ -388,7 +370,7 @@ function DashboardPageInner() {
    */
   const engagementNote = !leadSource
     ? periodLabel
-    : scopeByContact
+    : scopeByOrigin
       ? `${periodLabel} · ${filterNote} · leads with a known origin only`
       : `${periodLabel} · all origins — origin detail not available yet`;
 

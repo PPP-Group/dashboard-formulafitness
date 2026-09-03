@@ -59,7 +59,13 @@ export function useEngagement(): EngagementState {
           .eq("subaccount_id", subaccountId.current)
           .in("metric_key", ENGAGEMENT_KEYS as unknown as string[])
           .gte("metric_date", since)
+          // A total order, not just a date. Rows sharing a date have no
+          // guaranteed order of their own, so paging on the date alone can
+          // hand back the same row twice and skip another — invisible until a
+          // metric grows past one page, which the origin rows just did.
           .order("metric_date", { ascending: true })
+          .order("metric_key", { ascending: true })
+          .order("source", { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (rowErr) throw rowErr;

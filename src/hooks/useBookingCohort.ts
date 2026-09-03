@@ -57,7 +57,12 @@ export function useBookingCohort(): BookingCohortState {
           .eq("subaccount_id", subaccountId.current)
           .in("metric_key", COHORT_KEYS as unknown as string[])
           .gte("metric_date", since)
+          // Total order, for the same reason as useEngagement: this table is
+          // already past one page, and paging on the date alone would drop
+          // rows out of the cohort at random.
           .order("metric_date", { ascending: true })
+          .order("metric_key", { ascending: true })
+          .order("ghl_contact_id", { ascending: true })
           .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (rowErr) throw rowErr;
