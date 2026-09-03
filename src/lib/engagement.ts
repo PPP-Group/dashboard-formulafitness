@@ -178,3 +178,106 @@ export function buildEngagementSummary(
     replyRate: automated > 0 ? (replies / automated) * 100 : null,
   };
 }
+
+/**
+ * Row shape read from public.metric_contacts for the engagement cards.
+ *
+ * These cards keep the channel (`sms`, `call`) or the message fingerprint in
+ * `source`, so there is nothing there for a lead-origin filter to match on.
+ * The origin belongs to the contact, not to the message — so when an origin is
+ * selected the totals are rebuilt from the contact rows instead of the daily
+ * counts, and `occurrences` is what makes that possible: a lead who got three
+ * texts on one day is one row weighing three.
+ */
+export type EngagementContactRow = {
+  metric_key: string;
+  metric_date: string;
+  source: string;
+  ghl_contact_id: string;
+  occurrences: number;
+};
+
+/** Contact id to lead origin, from the rows behind the Leads Created metric. */
+export type OriginMap = Map<string, string>;
+
+/**
+ * Events for one metric in a window, counting only contacts of one origin.
+ *
+ * A contact with no origin on file is left out rather than guessed at. That
+ * happens when the opportunity was created before the rebuild window, or when
+ * there is no opportunity at all — a real gap, and the cards say so instead of
+ * quietly folding those people into whichever origin is selected.
+ */
+export function sumContactEvents(
+  rows: EngagementContactRow[],
+  metricKey: string,
+  from: string,
+  to: string,
+  origins: OriginMap,
+  origin: string,
+  source?: string,
+): number {
+  let total = 0;
+  for (const row of rows) {
+    if (row.metric_key !== metricKey) continue;
+    if (source !== undefined && row.source !== source) continue;
+    if (!inRange(row.metric_date, from, to)) continue;
+    if (origins.get(row.ghl_contact_id) !== origin) continue;
+    total += row.occurrences;
+  }
+  return total;
+}
+
+/** The engagement summary for one lead origin, rebuilt from the contact rows. */
+export function buildEngagementSummaryByOrigin(
+  rows: EngagementContactRow[],
+  from: string,
+  to: string,
+  origins: OriginMap,
+  origin: string,
+): EngagementSummary {
+  const sum = (key: string) =>
+    sumContactEvents(rows, key, from, to, origins, origin);
+
+  const automated = sum("msg_sent_auto");
+  const replies = sum("msg_reply");
+
+  return {
+    automated,
+    inbox: sum("msg_sent_inbox"),
+    replies,
+    failed: sum("msg_failed"),
+    optOuts: sum("optout_dnd"),
+    replyRate: automated > 0 ? (replies / automated) * 100 : null,
+  };
+}
+
+/** Per-message send and reply totals for one lead origin. */
+export function buildStepPerformanceByOrigin(
+  rows: EngagementContactRow[],
+  from: string,
+  to: string,
+  origins: OriginMap,
+  origin: string,
+  minSends = 1,
+): StepPerformance[] {
+  // Collapsed to the same {metric_key, source, count} shape the daily counts
+  // have, so the grouping and sorting rules live in exactly one place.
+  const folded = new Map<string, number>();
+  for (const row of rows) {
+    if (row.metric_key !== "step_sent" && row.metric_key !== "step_reply") {
+      continue;
+    }
+    if (!inRange(row.metric_date, from, to)) continue;
+    if (origins.get(row.ghl_contact_id) !== origin) continue;
+    const k = `${row.metric_key}|${row.source}`;
+    folded.set(k, (folded.get(k) ?? 0) + row.occurrences);
+  }
+
+  const asRows: MetricRow[] = [...folded].map(([k, count]) => {
+    const [metric_key, source] = k.split("|");
+    return { metric_key, source, count, metric_date: from };
+  });
+
+  return buildStepPerformance(asRows, from, to, minSends);
+}

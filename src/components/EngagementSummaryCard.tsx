@@ -52,7 +52,7 @@ export function EngagementSummaryCard({
                 Replies are inbound messages from contacts. Failed means the carrier rejected it or never delivered it. Opted out means the contact switched do-not-disturb on.
               </TipRow>
               <TipRow label="Filters">
-                The period picker chooses which days are counted. The origin filter does not apply here.
+                The period picker chooses which days are counted. The origin filter narrows it to the leads of one source, matched through the contact rather than the message, so leads with no origin on file are left out.
               </TipRow>
           </InfoTip>
         }

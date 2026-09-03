@@ -64,6 +64,7 @@ export function useMetricContacts(
   from: string,
   to: string,
   source?: string | string[] | null,
+  contactIds?: string[] | null,
 ): ContactsState {
   const [result, setResult] = useState<Result | null>(null);
   const subaccountId = useRef<string | null>(null);
@@ -71,8 +72,13 @@ export function useMetricContacts(
   // A message can sit behind several fingerprints, so the source is a list as
   // often as it is a single value. Joining it keeps the token a primitive.
   const sourceKey = Array.isArray(source) ? source.join(",") : (source ?? "");
+  // A card that computed its own set of people passes the ids; without it the
+  // query is "everyone this metric touched in the window".
+  const idsKey = contactIds ? contactIds.join(",") : "";
 
-  const token = metricKey ? `${metricKey}|${from}|${to}|${sourceKey}` : null;
+  const token = metricKey
+    ? `${metricKey}|${from}|${to}|${sourceKey}|${idsKey}`
+    : null;
 
   const load = useCallback(
     async (
@@ -80,7 +86,8 @@ export function useMetricContacts(
       key: string,
       start: string,
       end: string,
-      src?: string | string[] | null,
+      src: string | string[] | null | undefined,
+      ids: string[] | null | undefined,
     ) => {
       try {
         if (!subaccountId.current) {
@@ -111,6 +118,8 @@ export function useMetricContacts(
         } else if (src) {
           request = request.eq("source", src);
         }
+
+        if (ids) request = request.in("ghl_contact_id", ids);
 
         const { data, error: rowErr } = await request;
 
@@ -151,13 +160,13 @@ export function useMetricContacts(
     // a local starter so the effect body itself stays free of state writes.
     let alive = true;
     const start = () => {
-      if (alive) void load(token, metricKey, from, to, source);
+      if (alive) void load(token, metricKey, from, to, source, contactIds);
     };
     start();
     return () => {
       alive = false;
     };
-  }, [load, token, metricKey, from, to, source]);
+  }, [load, token, metricKey, from, to, source, contactIds]);
 
   if (!token) return EMPTY;
 

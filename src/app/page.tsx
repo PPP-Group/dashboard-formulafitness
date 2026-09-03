@@ -37,10 +37,15 @@ import { downloadCsv, toCsv } from "@/lib/csv";
 import { cohortBookingRate } from "@/lib/journey";
 import {
   buildEngagementSummary,
+  buildEngagementSummaryByOrigin,
   buildStepPerformance,
+  buildStepPerformanceByOrigin,
+  OriginMap,
   StepPerformance,
+  sumContactEvents,
 } from "@/lib/engagement";
 import { useEngagement } from "@/hooks/useEngagement";
+import { useEngagementContacts } from "@/hooks/useEngagementContacts";
 import { useBookingCohort } from "@/hooks/useBookingCohort";
 import { useMetrics } from "@/hooks/useMetrics";
 import { AiChannelsCard } from "@/components/AiChannelsCard";
@@ -84,6 +89,13 @@ function DashboardPageInner() {
     loading: engagementLoading,
     refresh: refreshEngagement,
   } = useEngagement();
+  // Contact-level engagement, which is the only way to scope the AI and message
+  // cards by lead origin — their `source` holds the channel or the message, so
+  // the origin has to come from the person.
+  const {
+    rows: engagementContacts,
+    unavailable: originScopeUnavailable,
+  } = useEngagementContacts();
 
   // Which number the contacts popup is currently open for.
   const [drill, setDrill] = useState<DrillTarget | null>(null);
@@ -126,6 +138,52 @@ function DashboardPageInner() {
   const engagementFirstLoad = engagementLoading && engagementRows.length === 0;
   const engagementRefetching = engagementLoading && engagementRows.length > 0;
 
+  /**
+   * Contact to lead origin, read off the rows behind Leads Created. Latest
+   * opportunity wins where somebody has more than one, so a lead who came back
+   * through a different route is counted as they most recently arrived.
+   */
+  const origins: OriginMap = useMemo(() => {
+    const map = new Map<string, { source: string; date: string }>();
+    for (const r of journeyRows) {
+      if (r.metric_key !== "form_submissions_total") continue;
+      const seen = map.get(r.ghl_contact_id);
+      if (!seen || r.metric_date > seen.date) {
+        map.set(r.ghl_contact_id, { source: r.source, date: r.metric_date });
+      }
+    }
+    return new Map([...map].map(([id, v]) => [id, v.source]));
+  }, [journeyRows]);
+
+  /**
+   * Whether the message and AI cards can honour the origin filter. They need
+   * the contact rows; without them the cards keep showing unfiltered totals
+   * and say so, rather than rendering zeros.
+   */
+  const scopeByContact =
+    leadSource !== null && !originScopeUnavailable && engagementContacts.length > 0;
+
+  /**
+   * Every pipeline metric carries the lead origin in `source`: the pipeline
+   * sync resolves the opportunity's origin and writes it on the booking and
+   * the close, not only on the lead. So the origin filter scopes all four of
+   * them together — filtered numerator over filtered denominator, which is
+   * what keeps a rate honest.
+   *
+   * The AI and message metrics are the exception. Their `source` is the
+   * channel or the message fingerprint, so there is nothing here for an origin
+   * to match on; those are filtered by contact instead, further down.
+   */
+  const selection: SourceSelection = useMemo(
+    () => ({
+      leads_created: leadSource,
+      game_plan_call_booked: leadSource,
+      consultation_booked: leadSource,
+      consultation_won: leadSource,
+    }),
+    [leadSource],
+  );
+
   const view = useMemo(() => {
     // The selected bucket is what every headline number reports on.
     const sel = bucketBounds(anchor, granularity);
@@ -145,19 +203,6 @@ function DashboardPageInner() {
     ).start;
     const retentionFloor = bucketBounds(minDate, granularity).start;
     const windowStart = trailStart < retentionFloor ? retentionFloor : trailStart;
-
-    /**
-     * `form_submissions_total` is the ONLY metric carrying an origin breakdown.
-     * So a lead-origin filter can scope the Leads metric and nothing else — it
-     * is applied where Leads stands on its own (its KPI tile, its line on the
-     * chart, its table column) and deliberately NOT to anything that puts Leads
-     * side by side with another metric.
-     *
-     * Mixing the two scopes is what produced a 200% booking rate: a filtered
-     * denominator (leads from one origin) under an unfilterable numerator (all
-     * Game Plan calls). Those cards read unfiltered totals and say so.
-     */
-    const selection: SourceSelection = { leads_created: leadSource };
 
     const spark = buildChartData(
       rows,
@@ -239,20 +284,51 @@ function DashboardPageInner() {
         to,
         granularity,
       ),
-      // Cross-metric comparisons: unfiltered on both sides, always.
-      ai: AI_CHANNELS.map((id) => sumInRange(rows, id, from, to)),
+      // The people of the selected origin, so a drill-down opened from a
+      // filtered card lists the same population the number counted. Null when
+      // nothing is filtered, which the drawer reads as "everyone".
+      originContactIds:
+        scopeByContact && leadSource
+          ? [...origins].filter(([, o]) => o === leadSource).map(([id]) => id)
+          : null,
+      // AI activations and AI messages by channel. With an origin selected
+      // these are rebuilt from the contact rows, because `source` here is the
+      // channel and has no room left for the origin.
+      ai: AI_CHANNELS.map((id) =>
+        scopeByContact && leadSource
+          ? sumContactEvents(
+              engagementContacts,
+              "ai_conversations",
+              from,
+              to,
+              origins,
+              leadSource,
+              SERIES[id].source ?? undefined,
+            )
+          : sumInRange(rows, id, from, to),
+      ),
       // Same three channels, but the messages sent rather than the switch-ons.
       aiInteractions: AI_CHANNELS.map((id) =>
-        sumMetricSource(rows, "ai_interactions", SERIES[id].source, from, to),
+        scopeByContact && leadSource
+          ? sumContactEvents(
+              engagementContacts,
+              "ai_interactions",
+              from,
+              to,
+              origins,
+              leadSource,
+              SERIES[id].source ?? undefined,
+            )
+          : sumMetricSource(rows, "ai_interactions", SERIES[id].source, from, to),
       ),
       // From metric_contacts, not the daily counts: a genuine cohort rate (booked
       // within the SAME window the lead was created), and — since
       // the contact rows carry `source` per contact — one the origin filter
       // can actually reach.
       bookingRate: cohortBookingRate(journeyRows, from, to, leadSource),
-      // Per-message engagement. Unfiltered by lead origin: `step_sent` and
-      // `step_reply` are keyed by which message went out, not where the lead
-      // came from, so the origin filter has nothing to match on here.
+      // Per-message engagement. `step_sent` and `step_reply` are keyed by
+      // which message went out, not by where the lead came from, so an origin
+      // filter is answered through the contact rows instead.
       //
       // Both read the SELECTED period, like every other headline number on the
       // page. Filtering to a day and being shown a 30-day total is the card
@@ -262,8 +338,26 @@ function DashboardPageInner() {
       // window, because a line needs more than one point, a weekday
       // distribution needs several weekdays, and the table is one row per
       // bucket. A total is not one of those.
-      engagement: buildEngagementSummary(engagementRows, from, to),
-      steps: buildStepPerformance(engagementRows, from, to),
+      engagement:
+        scopeByContact && leadSource
+          ? buildEngagementSummaryByOrigin(
+              engagementContacts,
+              from,
+              to,
+              origins,
+              leadSource,
+            )
+          : buildEngagementSummary(engagementRows, from, to),
+      steps:
+        scopeByContact && leadSource
+          ? buildStepPerformanceByOrigin(
+              engagementContacts,
+              from,
+              to,
+              origins,
+              leadSource,
+            )
+          : buildStepPerformance(engagementRows, from, to),
     };
   }, [
     rows,
@@ -272,6 +366,10 @@ function DashboardPageInner() {
     anchor,
     granularity,
     leadSource,
+    selection,
+    origins,
+    engagementContacts,
+    scopeByContact,
     today,
     minDate,
   ]);
@@ -280,6 +378,19 @@ function DashboardPageInner() {
   const filterNote = leadSource
     ? `origin: ${humanizeSource(leadSource, LEADS_KEY)}`
     : "";
+
+  /**
+   * Caption for the cards scoped through the contact rather than through
+   * `source`. It says out loud that people with no origin on file are left
+   * out — an unattributed contact is not evidence for whichever origin happens
+   * to be selected — and it says when the scoping is not available at all,
+   * instead of showing an unfiltered total under a filtered heading.
+   */
+  const engagementNote = !leadSource
+    ? periodLabel
+    : scopeByContact
+      ? `${periodLabel} · ${filterNote} · leads with a known origin only`
+      : `${periodLabel} · all origins — origin detail not available yet`;
 
   // Counted from what actually rendered, so the caption can't overstate the span.
   const unit =
@@ -373,9 +484,7 @@ function DashboardPageInner() {
                         label: def.label,
                         from: view.from,
                         to: view.to,
-                        source: effectiveSource(def, {
-                          leads_created: leadSource,
-                        }),
+                        source: effectiveSource(def, selection),
                         periodLabel,
                       })
                     }
@@ -416,7 +525,7 @@ function DashboardPageInner() {
                 interactions={view.aiInteractions}
                 loading={firstLoad}
                 refetching={refetching}
-                subtitle={periodLabel}
+                subtitle={engagementNote}
                 onSelectChannel={(channel) =>
                   setDrill({
                     metricKey: "ai_conversations",
@@ -424,6 +533,7 @@ function DashboardPageInner() {
                     from: view.from,
                     to: view.to,
                     source: channel,
+                    contactIds: view.originContactIds,
                     periodLabel,
                   })
                 }
@@ -438,14 +548,14 @@ function DashboardPageInner() {
                 summary={view.engagement}
                 loading={engagementFirstLoad}
                 refetching={engagementRefetching}
-                subtitle={periodLabel}
+                subtitle={engagementNote}
               />
               <div className="lg:col-span-2">
                 <MessagePerformanceCard
                   steps={view.steps}
                   loading={engagementFirstLoad}
                   refetching={engagementRefetching}
-                  subtitle={periodLabel}
+                  subtitle={engagementNote}
                   onSelect={(step: StepPerformance) =>
                     setDrill({
                       metricKey: "step_reply",
@@ -453,6 +563,7 @@ function DashboardPageInner() {
                       from: view.from,
                       to: view.to,
                       source: step.ids,
+                      contactIds: view.originContactIds,
                       periodLabel,
                     })
                   }
@@ -470,13 +581,19 @@ function DashboardPageInner() {
               subtitle={filterNote ? `${periodLabel} · ${filterNote}` : periodLabel}
               onSelect={() =>
                 setDrill({
-                  // The denominator: the leads created in this window. Which of
-                  // them booked is the question the card is asking.
-                  metricKey: "form_submissions_total",
-                  label: "Leads created in this period",
+                  // The numerator, not the denominator: the card asks how many
+                  // of the leads booked, so clicking it has to answer "which
+                  // ones". Opening the 65 leads behind the rate — including the
+                  // 41 who never booked — answered a question nobody asked.
+                  //
+                  // The ids come from the cohort itself, so the list is exactly
+                  // the people counted, with the date they booked on.
+                  metricKey: "game_plan_call_booked",
+                  label: "Leads from this period who booked a Game Plan call",
                   from: view.from,
                   to: view.to,
                   source: leadSource,
+                  contactIds: view.bookingRate.bookedIds,
                   periodLabel,
                 })
               }

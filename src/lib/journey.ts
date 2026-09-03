@@ -34,13 +34,17 @@ export const COHORT_KEYS = [
  * `leads` counts lead rows, one per opportunity, so the denominator matches the
  * "Leads Created" card exactly. `booked` counts contacts, so a contact with two
  * opportunities and one booking can never push the rate above 100%.
+ *
+ * `bookedIds` is that same numerator as a list, so the card's drill-down can
+ * show the people it actually counted rather than re-deriving a set that would
+ * not quite agree with the number on screen.
  */
 export function cohortBookingRate(
   rows: BookingCohortRow[],
   from: string,
   to: string,
   source?: string | null,
-): { leads: number; booked: number } {
+): { leads: number; booked: number; bookedIds: string[] } {
   const inWindow = (r: BookingCohortRow) =>
     r.metric_date >= from &&
     r.metric_date <= to &&
@@ -62,5 +66,9 @@ export function cohortBookingRate(
       .map((r) => r.ghl_contact_id),
   );
 
-  return { leads: leadRows.length, booked: booked.size };
+  return {
+    leads: leadRows.length,
+    booked: booked.size,
+    bookedIds: [...booked],
+  };
 }

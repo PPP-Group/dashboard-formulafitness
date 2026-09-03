@@ -15,6 +15,12 @@ export type DrillTarget = {
   to: string;
   /** null = every source for this metric. A list matches any of them. */
   source?: string | string[] | null;
+  /**
+   * Restricts the list to these people. Set by a card that worked out its own
+   * set — the booking cohort, say — so the drawer shows exactly who was
+   * counted instead of everyone the metric touched in the window.
+   */
+  contactIds?: string[] | null;
   /** Period text under the heading. */
   periodLabel: string;
 };
@@ -40,6 +46,7 @@ export function ContactDrawer({
     target?.from ?? "",
     target?.to ?? "",
     target?.source ?? null,
+    target?.contactIds ?? null,
   );
 
   /**

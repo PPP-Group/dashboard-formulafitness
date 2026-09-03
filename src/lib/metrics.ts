@@ -116,7 +116,7 @@ export const SERIES: Record<SeriesId, SeriesDef> = {
     tip: {
       what: "How many times the conversation AI was switched on across voice, SMS and email.",
       how: "The AI switches on the first time a lead writes in on a channel. A second message on the same channel continues that conversation and does not count again; writing in on a different channel does. Every voice call counts.",
-      filters: "The period picker chooses which activation dates are counted. The origin filter does not apply. Click a channel for the contacts behind it.",
+      filters: "The period picker chooses which activation dates are counted. The origin filter narrows it to the leads of one source, matched through the contact behind each activation. Click a channel for the contacts behind it.",
     },
   },
 

@@ -147,14 +147,15 @@ export function LeadSourceCard({
             </ul>
 
             {/*
-              Deliberately says "the Leads metric" and not "the dashboard":
-              origin only exists on this metric, so that is the honest scope.
+              Says "the page" now that it is true: the pipeline metrics carry
+              the origin on the row, and the AI and message cards are scoped
+              through the contact behind each event.
             */}
             <p className="mt-4 flex items-start gap-1.5 text-[11px] leading-relaxed text-ink-faint">
               <Filter size={11} className="mt-0.5 shrink-0" aria-hidden="true" />
               {selected
-                ? "Scoping the Leads metric to this origin — click again to clear."
-                : "Click an origin to scope the Leads metric to it. Other metrics carry no origin breakdown."}
+                ? "Scoping the page to this origin — click again to clear."
+                : "Click an origin to scope the whole page to it."}
             </p>
           </>
         )}

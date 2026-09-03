@@ -83,8 +83,8 @@ export function MessagePerformanceCard({
             </TipRow>
             <TipRow label="Filters">
               The period picker changes which sends are counted; a message not
-              sent in the period is not listed. The origin filter does not apply
-              here. Click a row for the contacts who replied.
+              sent in the period is not listed. The origin filter narrows it to the leads of one source, matched through the contact rather than the message, so leads with no origin on file are left out. Click a row for
+              the contacts who replied.
             </TipRow>
           </InfoTip>
         }

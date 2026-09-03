@@ -55,7 +55,7 @@ export function AiChannelsCard({
                 How much the AI then did: every message sent from the conversation view on that channel, plus every call. That view covers the conversation AI and anyone on the team, and GoHighLevel does not separate the two.
               </TipRow>
               <TipRow label="Filters">
-                The period picker chooses which activation dates are counted. The origin filter does not apply here. Click a channel for the contacts whose first message switched it on.
+                The period picker chooses which activation dates are counted. The origin filter narrows it to the leads of one source, matched through the contact rather than the message, so leads with no origin on file are left out. Click a channel for the contacts whose first message switched it on.
               </TipRow>
           </InfoTip>
         }
